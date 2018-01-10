@@ -15,7 +15,7 @@ namespace DurableFunctionVideoProcessor
             [HttpTrigger(AuthorizationLevel.Function, "get", "post",
                 Route = null)]
             HttpRequestMessage req,
-            DurableOrchestrationClient starter,
+            [OrchestrationClient] DurableOrchestrationClient starter,
             TraceWriter log)
         {
 
