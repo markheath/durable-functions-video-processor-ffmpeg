@@ -1,4 +1,5 @@
-﻿using System.Configuration;
+﻿using System;
+using System.Configuration;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -35,6 +36,8 @@ namespace DurableFunctionVideoProcessor
         {
             log.Info($"Extracting thumbnail from {incomingFile}");
             await Task.Delay(5000); // simulate some work
+            if (incomingFile.Contains("bad"))
+                throw new InvalidOperationException("Failed to extract thumbnail");
             return incomingFile + "-thumbnail.jpg";
         }
 
