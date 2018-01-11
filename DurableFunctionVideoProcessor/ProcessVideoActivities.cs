@@ -29,15 +29,17 @@ namespace DurableFunctionVideoProcessor
             return incomingFile + "-with-intro.mp4";
         }
 
+        private static int extractCount = 0; // purely for demo purposes
         [FunctionName("ExtractThumbnail")]
         public static async Task<string> ExtractThumbnail(
             [ActivityTrigger] string incomingFile,
             TraceWriter log)
         {
+            extractCount++;
             log.Info($"Extracting thumbnail from {incomingFile}");
             await Task.Delay(5000); // simulate some work
             if (incomingFile.Contains("bad"))
-                throw new InvalidOperationException("Failed to extract thumbnail");
+                throw new InvalidOperationException($"Failed to extract thumbnail on attempt {extractCount}");
             return incomingFile + "-thumbnail.jpg";
         }
 

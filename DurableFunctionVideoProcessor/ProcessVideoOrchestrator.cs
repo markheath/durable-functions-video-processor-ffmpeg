@@ -17,8 +17,8 @@ namespace DurableFunctionVideoProcessor
             {
                 var transcodedLocation = await ctx.CallActivityAsync<string>
                     ("TranscodeVideo", videoLocation);
-                var thumbnailLocation = await ctx.CallActivityAsync<string>
-                    ("ExtractThumbnail", transcodedLocation);
+                var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
+                    new RetryOptions(TimeSpan.FromSeconds(5), 4), transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>
                     ("PrependIntro", transcodedLocation);
                 return new { transcodedLocation, thumbnailLocation, withIntroLocation };
