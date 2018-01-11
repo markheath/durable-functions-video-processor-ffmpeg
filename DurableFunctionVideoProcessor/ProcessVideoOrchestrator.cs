@@ -13,13 +13,22 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
             var videoLocation = ctx.GetInput<string>();
-            var transcodedLocation = await ctx.CallActivityAsync<string>
-                                                ("TranscodeVideo", videoLocation);
-            var thumbnailLocation = await ctx.CallActivityAsync<string>
-                                                ("ExtractThumbnail", transcodedLocation);
-            var withIntroLocation = await ctx.CallActivityAsync<string>
-                                                ("PrependIntro", transcodedLocation);
-            return new { transcodedLocation, thumbnailLocation, withIntroLocation };
+            try
+            {
+                var transcodedLocation = await ctx.CallActivityAsync<string>
+                    ("TranscodeVideo", videoLocation);
+                var thumbnailLocation = await ctx.CallActivityAsync<string>
+                    ("ExtractThumbnail", transcodedLocation);
+                var withIntroLocation = await ctx.CallActivityAsync<string>
+                    ("PrependIntro", transcodedLocation);
+                return new { transcodedLocation, thumbnailLocation, withIntroLocation };
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to process video with error " + e.Message);
+                await ctx.CallActivityAsync("Cleanup", videoLocation);
+                return new {Error = "Failed to process video", e.Message};
+            }
         }
     }
 }

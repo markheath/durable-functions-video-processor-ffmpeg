@@ -41,6 +41,14 @@ namespace DurableFunctionVideoProcessor
             return incomingFile + "-thumbnail.jpg";
         }
 
-
+        [FunctionName("Cleanup")]
+        public static async Task<string> Cleanup(
+            [ActivityTrigger] string incomingFile,
+            TraceWriter log)
+        {
+            log.Info($"Cleaning up {incomingFile}");
+            await Task.Delay(5000); // simulate some work
+            return "Finished";
+        }
     }
 }
