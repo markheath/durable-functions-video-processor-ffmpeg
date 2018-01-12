@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -15,8 +17,20 @@ namespace DurableFunctionVideoProcessor
             var videoLocation = ctx.GetInput<string>();
             try
             {
-                var transcodedLocation = await ctx.CallActivityAsync<string>
-                    ("TranscodeVideo", videoLocation);
+                var desiredBitrates = new[] {1000,2000,3000,4000};
+                var transcodeTasks = new List<Task<VideoFileInfo>>();
+                foreach (var bitrate in desiredBitrates)
+                {
+                    var fileInfo = new VideoFileInfo()
+                        { BitRate = bitrate, Location = videoLocation};
+                    var transcodeTask = ctx.CallActivityAsync<VideoFileInfo>
+                        ("TranscodeVideo", fileInfo);
+                    transcodeTasks.Add(transcodeTask);
+                }
+                var results = await Task.WhenAll(transcodeTasks);
+                var transcodedLocation = results
+                    .First(r => r.BitRate == 4000)
+                    .Location;
                 var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>

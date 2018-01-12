@@ -6,16 +6,26 @@ using Microsoft.Azure.WebJobs.Host;
 
 namespace DurableFunctionVideoProcessor
 {
+    public class VideoFileInfo
+    {
+        public string Location { get; set; }
+        public int BitRate { get; set; }
+    }
+
     public static class ProcessVideoActivities
     {
         [FunctionName("TranscodeVideo")]
-        public static async Task<string> TranscodeVideo(
-            [ActivityTrigger] string incomingFile,
+        public static async Task<VideoFileInfo> TranscodeVideo(
+            [ActivityTrigger] VideoFileInfo incomingFile,
             TraceWriter log)
         {
-            log.Info($"Transcoding {incomingFile}");
+            log.Info($"Transcoding {incomingFile.Location} to {incomingFile.BitRate}");
             await Task.Delay(5000); // simulate some work
-            return incomingFile + "-transcoded.mp4";
+            return new VideoFileInfo
+            {
+                Location = incomingFile + "-transcoded.mp4",
+                BitRate = incomingFile.BitRate
+            };
         }
 
         [FunctionName("PrependIntro")]
