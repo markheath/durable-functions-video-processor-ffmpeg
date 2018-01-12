@@ -74,5 +74,36 @@ namespace DurableFunctionVideoProcessor
             await Task.Delay(5000); // simulate some work
             return "Finished";
         }
+
+        [FunctionName("SendApprovalRequestEmail")]
+        public static async Task<string> SendApprovalRequestEmail(
+            [ActivityTrigger] string videoLocation,
+            TraceWriter log)
+        {
+            log.Info($"Sending approval request for {videoLocation}");
+            await Task.Delay(5000); // simulate sending email
+            return "Approval request sent";
+        }
+
+        [FunctionName("PublishVideo")]
+        public static async Task<string> PublishVideo(
+            [ActivityTrigger] object videoLocations,
+            TraceWriter log)
+        {
+            log.Info($"Publishing video");
+            await Task.Delay(5000); // simulate publishing video
+            return "The video is live";
+        }
+
+        [FunctionName("RejectVideo")]
+        public static async Task<string> RejectVideo(
+            [ActivityTrigger] object videoLocations,
+            TraceWriter log)
+        {
+            log.Info($"Rejecting video");
+            await Task.Delay(5000); // simulate deleting videos
+            return "All temporary files have been deleted";
+        }
+
     }
 }

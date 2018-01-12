@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.WindowsAzure.Storage.Table;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -24,7 +25,18 @@ namespace DurableFunctionVideoProcessor
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>
                     ("PrependIntro", transcodedLocation);
-                return new { transcodedLocation, thumbnailLocation, withIntroLocation };
+                await ctx.CallActivityAsync("SendApprovalRequestEmail", withIntroLocation);
+                var approvalResult = await ctx.WaitForExternalEvent<string>("ApprovalResult");
+                if (approvalResult == "Approved")
+                {
+                    await ctx.CallActivityAsync("PublishVideo",
+                        new {transcodedLocation, thumbnailLocation, withIntroLocation});
+                    return "Approved and published";
+                }
+                await ctx.CallActivityAsync("RejectVideo",
+                    new { transcodedLocation, thumbnailLocation, withIntroLocation });
+                return "Rejected";
+
             }
             catch (Exception e)
             {

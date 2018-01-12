@@ -18,7 +18,6 @@ namespace DurableFunctionVideoProcessor
             [OrchestrationClient] DurableOrchestrationClient starter,
             TraceWriter log)
         {
-
             // parse query parameter
             string video = req.GetQueryNameValuePairs()
                 .FirstOrDefault(q => string.Compare(q.Key, "video", true) == 0)
