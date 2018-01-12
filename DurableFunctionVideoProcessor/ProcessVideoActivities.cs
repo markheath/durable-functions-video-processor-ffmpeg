@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Configuration;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -14,6 +15,17 @@ namespace DurableFunctionVideoProcessor
 
     public static class ProcessVideoActivities
     {
+        [FunctionName("GetTranscodeBitRates")]
+        public static int[] GetTranscodeBitRates(
+            [ActivityTrigger] object input,
+            TraceWriter log)
+        {
+            var bitrates = ConfigurationManager.AppSettings["TranscodeBitRates"];
+            if (String.IsNullOrEmpty(bitrates))
+                return new [] {1000, 2000, 3000, 4000};
+            return bitrates.Split(',').Select(int.Parse).ToArray();
+        }
+
         [FunctionName("TranscodeVideo")]
         public static async Task<VideoFileInfo> TranscodeVideo(
             [ActivityTrigger] VideoFileInfo incomingFile,

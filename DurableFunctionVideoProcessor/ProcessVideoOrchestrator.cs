@@ -17,7 +17,8 @@ namespace DurableFunctionVideoProcessor
             var videoLocation = ctx.GetInput<string>();
             try
             {
-                var desiredBitrates = new[] {1000,2000,3000,4000};
+                var desiredBitrates = await 
+                ctx.CallActivityAsync<int[]>("GetTranscodeBitrates", null);
                 var transcodeTasks = new List<Task<VideoFileInfo>>();
                 foreach (var bitrate in desiredBitrates)
                 {
@@ -29,7 +30,8 @@ namespace DurableFunctionVideoProcessor
                 }
                 var results = await Task.WhenAll(transcodeTasks);
                 var transcodedLocation = results
-                    .First(r => r.BitRate == 4000)
+                    .OrderByDescending(r => r.BitRate)
+                    .First()
                     .Location;
                 var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), transcodedLocation);
