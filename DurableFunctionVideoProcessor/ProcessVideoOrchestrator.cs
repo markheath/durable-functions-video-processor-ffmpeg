@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
-using Microsoft.WindowsAzure.Storage.Table;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -28,26 +27,7 @@ namespace DurableFunctionVideoProcessor
                     ("PrependIntro", transcodedLocation);
                 var approvalInfo =
                     new ApprovalInfo {OrchestrationId = ctx.InstanceId, VideoLocation = withIntroLocation};
-                await ctx.CallActivityAsync("SendApprovalRequestEmail", approvalInfo);
-
-                string approvalResult;
-                using (var cts = new CancellationTokenSource())
-                {
-                    var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(30);
-                    var timeoutTask = ctx.CreateTimer(timeoutAt, cts.Token);
-                    var approvalTask = ctx.WaitForExternalEvent<string>("ApprovalResult");
-
-                    var winner = await Task.WhenAny(approvalTask, timeoutTask);
-                    if (winner == approvalTask)
-                    {
-                        approvalResult = approvalTask.Result;
-                        cts.Cancel(); // we should cancel the timeout task
-                    }
-                    else
-                    {
-                        approvalResult = "TimedOut";
-                    }
-                }
+                var approvalResult = await ctx.CallSubOrchestratorAsync<string>("GetApprovalResultOrchestrator", approvalInfo);
 
                 if (approvalResult == "Approved")
                 {
@@ -91,6 +71,35 @@ namespace DurableFunctionVideoProcessor
                 .First()
                 .Location;
             return transcodedLocation;
+        }
+
+        [FunctionName("GetApprovalResultOrchestrator")]
+        public static async Task<string> GetApprovalResultOrchestrator(
+            [OrchestrationTrigger] DurableOrchestrationContext ctx,
+            TraceWriter log)
+        {
+            var approvalInfo = ctx.GetInput<ApprovalInfo>();
+            await ctx.CallActivityAsync("SendApprovalRequestEmail", approvalInfo);
+
+            string approvalResult;
+            using (var cts = new CancellationTokenSource())
+            {
+                var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(30);
+                var timeoutTask = ctx.CreateTimer(timeoutAt, cts.Token);
+                var approvalTask = ctx.WaitForExternalEvent<string>("ApprovalResult");
+
+                var winner = await Task.WhenAny(approvalTask, timeoutTask);
+                if (winner == approvalTask)
+                {
+                    approvalResult = approvalTask.Result;
+                    cts.Cancel(); // we should cancel the timeout task
+                }
+                else
+                {
+                    approvalResult = "TimedOut";
+                }
+            }
+            return approvalResult;
         }
     }
 }
