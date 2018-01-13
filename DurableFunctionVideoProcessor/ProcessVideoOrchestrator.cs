@@ -116,5 +116,55 @@ namespace DurableFunctionVideoProcessor
             ctx.ContinueAsNew(timesRun);
             return timesRun;
         }
+
+
+        /// <summary>
+        /// In this example we call an activity that triggers some external action. 
+        /// When that external action completes an event is raised which our orchestration is waiting for
+        /// Then we decide whether to continue or not
+        /// </summary>
+        [FunctionName("ContinueAsNewExample2")]
+        public static async Task<string> ContinueAsNewExample2(
+            [OrchestrationTrigger] DurableOrchestrationContext ctx,
+            TraceWriter log)
+        {
+            var lastRunResult = ctx.GetInput<string>();
+            log.Info($"Starting external action");
+            await ctx.CallActivityAsync("StartExternalAction", lastRunResult);
+            var externalActionResult = await ctx.WaitForExternalEvent<string>("ExternalActionCompleted");
+            if (externalActionResult != "end")
+                ctx.ContinueAsNew(externalActionResult);
+            return externalActionResult;
+        }
+
+        /// <summary>
+        /// This is the stateful singleton pattern that is currently NOT recoemmended
+        /// due to this race condition on GitHub which causes some events to get lost
+        /// https://github.com/Azure/azure-functions-durable-extension/issues/67
+        /// </summary>
+        [FunctionName("ContinueAsNewExample3")]
+        public static async Task<int> ContinueAsNewExample3(
+            [OrchestrationTrigger] DurableOrchestrationContext ctx,
+            TraceWriter log)
+        {
+            var counterState = ctx.GetInput<int>();
+            log.Info($"Current counter state is {counterState}. Waiting for next operation.");
+            var operation = await ctx.WaitForExternalEvent<string>("operation");
+            log.Info($"Received '{operation}' operation.");
+            operation = operation?.ToLowerInvariant();
+            if (operation == "incr")
+            {
+                counterState++;
+            }
+            else if (operation == "decr")
+            {
+                counterState--;
+            }
+            if (operation != "end")
+            {
+                ctx.ContinueAsNew(counterState);
+            }
+            return counterState;
+        }
     }
 }
