@@ -13,6 +13,13 @@ namespace DurableFunctionVideoProcessor
         public int BitRate { get; set; }
     }
 
+    public class ApprovalInfo
+    {
+        public string OrchestrationId { get; set; }
+        public string VideoLocation { get; set; }
+    }
+
+
     public static class ProcessVideoActivities
     {
         [FunctionName("GetTranscodeBitRates")]
@@ -77,10 +84,18 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName("SendApprovalRequestEmail")]
         public static async Task<string> SendApprovalRequestEmail(
-            [ActivityTrigger] string videoLocation,
+            [ActivityTrigger] ApprovalInfo approvalInfo,
             TraceWriter log)
         {
-            log.Info($"Sending approval request for {videoLocation}");
+            log.Info($"Sending approval request for {approvalInfo.VideoLocation}");
+            var host = Environment.GetEnvironmentVariable("HTTP_HOST") ?? "localhost:7071";
+            var functionAddress = $"http://{host}/api/SubmitVideoApproval?id={approvalInfo.OrchestrationId}";
+            var approvedLink = functionAddress + "&result=Approved";
+            var rejectedLink = functionAddress + "&result=Rejected";
+            var emailContent = $"Please review {approvalInfo.VideoLocation}\n"
+                               + $"To approve click {approvedLink}\n"
+                               + $"To reject click {rejectedLink}";
+            log.Warning(emailContent);
             await Task.Delay(5000); // simulate sending email
             return "Approval request sent";
         }
