@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.WindowsAzure.Storage.Table;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -27,16 +29,35 @@ namespace DurableFunctionVideoProcessor
                 var approvalInfo =
                     new ApprovalInfo {OrchestrationId = ctx.InstanceId, VideoLocation = withIntroLocation};
                 await ctx.CallActivityAsync("SendApprovalRequestEmail", approvalInfo);
-                var approvalResult = await ctx.WaitForExternalEvent<string>("ApprovalResult");
+
+                string approvalResult;
+                using (var cts = new CancellationTokenSource())
+                {
+                    var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(30);
+                    var timeoutTask = ctx.CreateTimer(timeoutAt, cts.Token);
+                    var approvalTask = ctx.WaitForExternalEvent<string>("ApprovalResult");
+
+                    var winner = await Task.WhenAny(approvalTask, timeoutTask);
+                    if (winner == approvalTask)
+                    {
+                        approvalResult = approvalTask.Result;
+                        cts.Cancel(); // we should cancel the timeout task
+                    }
+                    else
+                    {
+                        approvalResult = "TimedOut";
+                    }
+                }
+
                 if (approvalResult == "Approved")
                 {
                     await ctx.CallActivityAsync("PublishVideo",
-                        new {transcodedLocation, thumbnailLocation, withIntroLocation});
+                        new { transcodedLocation, thumbnailLocation, withIntroLocation });
                     return "Approved and published";
                 }
                 await ctx.CallActivityAsync("RejectVideo",
-                    new {transcodedLocation, thumbnailLocation, withIntroLocation});
-                return "Rejected";
+                    new { transcodedLocation, thumbnailLocation, withIntroLocation });
+                return $"Not published because {approvalResult}";
 
             }
             catch (Exception e)
