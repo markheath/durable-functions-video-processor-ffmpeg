@@ -9,10 +9,10 @@ using Microsoft.Azure.WebJobs.Host;
 
 namespace DurableFunctionVideoProcessor
 {
-    public static class ProcessVideoStarterFunction
+    public static class ProcessVideoFunctions
     {
         [FunctionName("ProcessVideoStarter")]
-        public static async Task<HttpResponseMessage> Run(
+        public static async Task<HttpResponseMessage> ProcessVideoStarter(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post",
                 Route = null)] HttpRequestMessage req,
             [OrchestrationClient] DurableOrchestrationClient starter,
@@ -37,12 +37,9 @@ namespace DurableFunctionVideoProcessor
             var instanceId = await starter.StartNewAsync("ProcessVideoOrchestrator", video);
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
-    }
 
-    public static class SubmitVideoApprovalFunction
-    {
         [FunctionName("SubmitVideoApproval")]
-        public static async Task<HttpResponseMessage> Run(
+        public static async Task<HttpResponseMessage> SubmitVideoApproval(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)]
             HttpRequestMessage req,
             [OrchestrationClient] DurableOrchestrationClient client,
@@ -65,6 +62,17 @@ namespace DurableFunctionVideoProcessor
             await client.RaiseEventAsync(orchestrationId, "ApprovalResult", result);
 
             return req.CreateResponse(HttpStatusCode.Accepted);
+        }
+
+        [FunctionName("StartPeriodicTask")]
+        public static async Task<HttpResponseMessage> StartPeriodicTask(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)]
+            HttpRequestMessage req,
+            [OrchestrationClient] DurableOrchestrationClient client,
+            TraceWriter log)
+        {
+            var instanceId = await client.StartNewAsync("PeriodicTaskOrchestrator", 0);
+            return client.CreateCheckStatusResponse(req, instanceId);
         }
     }
 }

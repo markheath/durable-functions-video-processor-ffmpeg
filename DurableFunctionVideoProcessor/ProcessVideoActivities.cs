@@ -120,5 +120,13 @@ namespace DurableFunctionVideoProcessor
             return "All temporary files have been deleted";
         }
 
+
+        [FunctionName("PeriodicActivity")]
+        public static void PeriodicActivity(
+            [ActivityTrigger] int timesRun,
+            TraceWriter log)
+        {
+            log.Info($"Running the periodic activity {timesRun}");
+        }
     }
 }

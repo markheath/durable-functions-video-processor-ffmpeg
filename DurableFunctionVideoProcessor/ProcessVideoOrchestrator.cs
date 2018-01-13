@@ -101,5 +101,20 @@ namespace DurableFunctionVideoProcessor
             }
             return approvalResult;
         }
+
+        [FunctionName("PeriodicTaskOrchestrator")]
+        public static async Task<int> PeriodicTaskOrchestrator(
+            [OrchestrationTrigger] DurableOrchestrationContext ctx,
+            TraceWriter log)
+        {
+            var timesRun = ctx.GetInput<int>();
+            timesRun++;
+            log.Info($"Starting the PeriodicTaskOrchestrator {ctx.InstanceId}, {timesRun}");
+            await ctx.CallActivityAsync("PeriodicActivity", timesRun);
+            var nextRun = ctx.CurrentUtcDateTime.AddSeconds(30);
+            await ctx.CreateTimer(nextRun, CancellationToken.None);
+            ctx.ContinueAsNew(timesRun);
+            return timesRun;
+        }
     }
 }
