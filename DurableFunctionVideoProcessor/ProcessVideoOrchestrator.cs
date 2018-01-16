@@ -42,7 +42,8 @@ namespace DurableFunctionVideoProcessor
             }
             catch (Exception e)
             {
-                log.Error("Failed to process video with error " + e.Message);
+                if (!ctx.IsReplaying)
+                    log.Error("Failed to process video with error " + e.Message);
                 await ctx.CallActivityAsync("Cleanup", videoLocation);
                 return new {Error = "Failed to process video", e.Message};
             }
@@ -109,7 +110,8 @@ namespace DurableFunctionVideoProcessor
         {
             var timesRun = ctx.GetInput<int>();
             timesRun++;
-            log.Info($"Starting the PeriodicTaskOrchestrator {ctx.InstanceId}, {timesRun}");
+            if (!ctx.IsReplaying)
+                log.Info($"Starting the PeriodicTaskOrchestrator {ctx.InstanceId}, {timesRun}");
             await ctx.CallActivityAsync("PeriodicActivity", timesRun);
             var nextRun = ctx.CurrentUtcDateTime.AddSeconds(30);
             await ctx.CreateTimer(nextRun, CancellationToken.None);
@@ -129,7 +131,8 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
             var lastRunResult = ctx.GetInput<string>();
-            log.Info($"Starting external action");
+            if (!ctx.IsReplaying)
+                log.Info("Starting external action");
             await ctx.CallActivityAsync("StartExternalAction", lastRunResult);
             var externalActionResult = await ctx.WaitForExternalEvent<string>("ExternalActionCompleted");
             if (externalActionResult != "end")
@@ -148,9 +151,11 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
             var counterState = ctx.GetInput<int>();
-            log.Info($"Current counter state is {counterState}. Waiting for next operation.");
+            if (!ctx.IsReplaying)
+                log.Info($"Current counter state is {counterState}. Waiting for next operation.");
             var operation = await ctx.WaitForExternalEvent<string>("operation");
-            log.Info($"Received '{operation}' operation.");
+            if (!ctx.IsReplaying)
+                log.Info($"Received '{operation}' operation.");
             operation = operation?.ToLowerInvariant();
             if (operation == "incr")
             {
