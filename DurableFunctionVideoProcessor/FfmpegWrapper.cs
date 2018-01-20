@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,14 +10,13 @@ namespace DurableFunctionVideoProcessor
 {
     static class FfmpegWrapper
     {
-        public static async Task<string> Transcode(string input, int qualityFactor, TraceWriter log)
+        public static async Task<string> Transcode(TranscodeParams transcodeParams, TraceWriter log)
         {
-            if (qualityFactor < 18 || qualityFactor > 28) throw new ArgumentOutOfRangeException(nameof(qualityFactor), "Quality Factor factor should be in the range 18 to 28");
             var outputFolder = Path.Combine(Path.GetTempPath(), "transcodes", $"{DateTime.Today:yyyy-MM-dd}");
             Directory.CreateDirectory(outputFolder);
-            var outputFile = Path.Combine(outputFolder, $"{Guid.NewGuid()}-q{qualityFactor}.mp4");
-            var ffmpegParams = "-n -vcodec libx264 -strict -2 -c:a aac -pix_fmt yuv420p -crf 28 -preset veryfast -profile:v baseline -f mp4 -movflags faststart ";
-            var arguments = $"-i \"{input}\" {ffmpegParams} {outputFile}";
+            var outputFile = Path.Combine(outputFolder, $"{Guid.NewGuid()}{transcodeParams.OutputExtension}");
+            //var ffmpegParams = "-n -vcodec libx264 -strict -2 -c:a aac -pix_fmt yuv420p -crf 28 -preset veryfast -profile:v baseline -f mp4 -movflags faststart ";
+            var arguments = $"-i \"{transcodeParams.InputFile}\" {transcodeParams.FfmpegParams} {outputFile}";
 
             await RunFfmpeg(arguments, log);
             return outputFile;

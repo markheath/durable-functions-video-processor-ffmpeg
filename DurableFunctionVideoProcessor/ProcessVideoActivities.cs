@@ -1,18 +1,19 @@
 ﻿using System;
 using System.Configuration;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Newtonsoft.Json;
 
 namespace DurableFunctionVideoProcessor
 {
-    public class VideoFileInfo
+    public class TranscodeParams
     {
-        public string Location { get; set; }
-        public int BitRate { get; set; }
+        public string InputFile { get; set; }
+        public string OutputExtension { get; set; }
+        public string FfmpegParams { get; set; }
     }
 
     public class ApprovalInfo
@@ -24,42 +25,40 @@ namespace DurableFunctionVideoProcessor
 
     public static class ProcessVideoActivities
     {
-        [FunctionName("GetTranscodeBitRates")]
-        public static int[] GetTranscodeBitRates(
+        [FunctionName("GetTranscodeProfiles")]
+        public static TranscodeParams[] GetTranscodeProfiles(
             [ActivityTrigger] object input,
             TraceWriter log)
         {
-            var bitrates = ConfigurationManager.AppSettings["TranscodeBitRates"];
+            var bitrates = ConfigurationManager.AppSettings["TranscodeProfiles"];
             if (String.IsNullOrEmpty(bitrates))
-                return new [] {1000, 2000, 3000, 4000};
-            return bitrates.Split(',').Select(int.Parse).ToArray();
+                return new []
+                {
+                    new TranscodeParams { OutputExtension = ".mp4", FfmpegParams = "-vcodec libx264 -strict -2 -c:a aac -pix_fmt yuv420p -crf 28 -preset veryfast -profile:v baseline -f mp4 -movflags faststart"},
+                    new TranscodeParams { OutputExtension = ".flv", FfmpegParams = "-c:v libx264 -crf 28 -t 5" },
+                };
+            return JsonConvert.DeserializeObject<TranscodeParams[]>(bitrates);
         }
 
         [FunctionName("TranscodeVideo")]
-        public static async Task<VideoFileInfo> TranscodeVideo(
-            [ActivityTrigger] VideoFileInfo incomingFile,
+        public static async Task<string> TranscodeVideo(
+            [ActivityTrigger] TranscodeParams transcodeParams,
             [Blob("processed/transcoded")] CloudBlobDirectory dir,
             TraceWriter log)
         {
-            var transcodedBlobName = "transcoded-" + incomingFile.BitRate + ".mp4";
-            log.Info($"Transcoding {incomingFile.Location} to {incomingFile.BitRate} output {transcodedBlobName}");
+            var outputBlobName = "transcoded" + transcodeParams.OutputExtension;
+            log.Info($"Transcoding {transcodeParams.InputFile} with params {transcodeParams.FfmpegParams} with extension {transcodeParams.OutputExtension}");
             if (ConfigurationManager.AppSettings["DemoMode"] == "true")
             {
                 await Task.Delay(5000); // simulate some work
-            }
-            else
-            {
-                var output = await FfmpegWrapper.Transcode(incomingFile.Location, 28, log);
-                var blob = dir.GetBlockBlobReference(transcodedBlobName);
-                await blob.UploadFromFileAsync(output);
-                File.Delete(output);
+                return $"{Guid.NewGuid()}{transcodeParams.OutputExtension}";
             }
 
-            return new VideoFileInfo
-            {
-                Location = transcodedBlobName,
-                BitRate = incomingFile.BitRate
-            };
+            var outputFilePath = await FfmpegWrapper.Transcode(transcodeParams, log);
+            var blob = dir.GetBlockBlobReference(outputBlobName);
+            await blob.UploadFromFileAsync(outputFilePath);
+            File.Delete(outputFilePath);
+            return outputBlobName;
         }
 
         [FunctionName("PrependIntro")]

@@ -18,9 +18,11 @@ namespace DurableFunctionVideoProcessor
             var videoLocation = ctx.GetInput<string>();
             try
             {
-                var transcodedLocation = await
-                    ctx.CallSubOrchestratorAsync<string>("TranscodeOrchestrator",
+                var transcodedLocations = await
+                    ctx.CallSubOrchestratorAsync<string[]>("TranscodeOrchestrator",
                         videoLocation);
+                var transcodedLocation = transcodedLocations.First(x => x.EndsWith(".mp4"));
+
                 var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), // {Handle = ex => ex.InnerException is InvalidOperationException}, - currently not possible #84
                     transcodedLocation);
@@ -51,28 +53,23 @@ namespace DurableFunctionVideoProcessor
         }
 
         [FunctionName("TranscodeOrchestrator")]
-        public static async Task<object> TranscodeOrchestrator(
+        public static async Task<string[]> TranscodeOrchestrator(
             [OrchestrationTrigger] DurableOrchestrationContext ctx,
             TraceWriter log)
         {
             var videoLocation = ctx.GetInput<string>();
-            var desiredBitrates = await
-                ctx.CallActivityAsync<int[]>("GetTranscodeBitrates", null);
-            var transcodeTasks = new List<Task<VideoFileInfo>>();
-            foreach (var bitrate in desiredBitrates)
+            var transcodeProfiles = await
+                ctx.CallActivityAsync<TranscodeParams[]>("GetTranscodeProfiles", null);
+            var transcodeTasks = new List<Task<string>>();
+            foreach (var transcodeProfile in transcodeProfiles)
             {
-                var fileInfo = new VideoFileInfo()
-                    {BitRate = bitrate, Location = videoLocation};
-                var transcodeTask = ctx.CallActivityAsync<VideoFileInfo>
-                    ("TranscodeVideo", fileInfo);
+                transcodeProfile.InputFile = videoLocation;
+                var transcodeTask = ctx.CallActivityAsync<string>
+                    ("TranscodeVideo", transcodeProfile);
                 transcodeTasks.Add(transcodeTask);
             }
-            var results = await Task.WhenAll(transcodeTasks);
-            var transcodedLocation = results
-                .OrderByDescending(r => r.BitRate)
-                .First()
-                .Location;
-            return transcodedLocation;
+            var locations = await Task.WhenAll(transcodeTasks);
+            return locations;
         }
 
         [FunctionName("GetApprovalResultOrchestrator")]
