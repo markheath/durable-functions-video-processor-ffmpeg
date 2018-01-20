@@ -21,7 +21,7 @@ namespace DurableFunctionVideoProcessor
                 var transcodedLocations = await
                     ctx.CallSubOrchestratorAsync<string[]>("TranscodeOrchestrator",
                         videoLocation);
-                var transcodedLocation = transcodedLocations.First(x => x.EndsWith(".mp4"));
+                var transcodedLocation = transcodedLocations.First(x => x.Contains(".mp4")); // these are SAS tokens
 
                 var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), // {Handle = ex => ex.InnerException is InvalidOperationException}, - currently not possible #84

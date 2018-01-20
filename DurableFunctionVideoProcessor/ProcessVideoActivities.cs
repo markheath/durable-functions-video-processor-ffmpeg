@@ -22,6 +22,29 @@ namespace DurableFunctionVideoProcessor
         public string VideoLocation { get; set; }
     }
 
+    static class ActivityHelpers
+    {
+        public static bool IsInDemoMode => ConfigurationManager.AppSettings["DemoMode"] == "true";
+
+        public static string GetTempFolder()
+        {
+            var outputFolder = Path.Combine(Path.GetTempPath(), "transcodes", $"{DateTime.Today:yyyy-MM-dd}");
+            Directory.CreateDirectory(outputFolder);
+            return outputFolder;
+        }
+
+        public static string GetReadSas(ICloudBlob blob, TimeSpan validDuration)
+        {
+            var sas = blob.GetSharedAccessSignature(new SharedAccessBlobPolicy()
+            {
+                Permissions = SharedAccessBlobPermissions.Read,
+                SharedAccessStartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+                SharedAccessExpiryTime = DateTimeOffset.UtcNow + validDuration
+            });
+            var location = blob.StorageUri.PrimaryUri.AbsoluteUri + sas;
+            return location;
+        }
+    }
 
     public static class ProcessVideoActivities
     {
@@ -46,19 +69,21 @@ namespace DurableFunctionVideoProcessor
             [Blob("processed/transcoded")] CloudBlobDirectory dir,
             TraceWriter log)
         {
-            var outputBlobName = "transcoded" + transcodeParams.OutputExtension;
+            var outputBlobName = Path.GetFileNameWithoutExtension(transcodeParams.InputFile) + transcodeParams.OutputExtension;
             log.Info($"Transcoding {transcodeParams.InputFile} with params {transcodeParams.FfmpegParams} with extension {transcodeParams.OutputExtension}");
-            if (ConfigurationManager.AppSettings["DemoMode"] == "true")
+            if (ActivityHelpers.IsInDemoMode)
             {
                 await Task.Delay(5000); // simulate some work
                 return $"{Guid.NewGuid()}{transcodeParams.OutputExtension}";
             }
 
-            var outputFilePath = await FfmpegWrapper.Transcode(transcodeParams, log);
-            var blob = dir.GetBlockBlobReference(outputBlobName);
-            await blob.UploadFromFileAsync(outputFilePath);
+            var outputFilePath = Path.Combine(ActivityHelpers.GetTempFolder(), $"{Guid.NewGuid()}{transcodeParams.OutputExtension}");
+            await FfmpegWrapper.Transcode(transcodeParams.InputFile, transcodeParams.FfmpegParams, outputFilePath, log);
+            var outputBlob = dir.GetBlockBlobReference(outputBlobName);
+            await outputBlob.UploadFromFileAsync(outputFilePath);
             File.Delete(outputFilePath);
-            return outputBlobName;
+            
+            return ActivityHelpers.GetReadSas(outputBlob, TimeSpan.FromHours(2));
         }
 
         [FunctionName("PrependIntro")]
@@ -72,17 +97,30 @@ namespace DurableFunctionVideoProcessor
             return incomingFile + "-with-intro.mp4";
         }
 
-        private static int extractCount = 0; // purely for demo purposes
+        private static int extractCount = 0; // purely for demo purposes - don't use static variables in real world function app!
         [FunctionName("ExtractThumbnail")]
         public static async Task<string> ExtractThumbnail(
             [ActivityTrigger] string incomingFile,
+            [Blob("processed/thumbnails")] CloudBlobDirectory dir,
             TraceWriter log)
         {
-            extractCount++;
             log.Info($"Extracting thumbnail from {incomingFile}");
-            await Task.Delay(5000); // simulate some work
-            if (incomingFile.Contains("bad"))
-                throw new InvalidOperationException($"Failed to extract thumbnail on attempt {extractCount}");
+            var outputBlobName = Path.GetFileNameWithoutExtension(incomingFile) + "-thumbnail.png";
+            if (ActivityHelpers.IsInDemoMode)
+            {
+                extractCount++;
+                if (incomingFile.Contains("bad"))
+                    throw new InvalidOperationException($"Failed to extract thumbnail on attempt {extractCount}");
+                await Task.Delay(5000); // simulate some work
+            }
+            else
+            {
+                var outputFilePath = Path.Combine(ActivityHelpers.GetTempFolder(), $"{Guid.NewGuid()}.png");
+                await FfmpegWrapper.Transcode(incomingFile, "-vf  \"thumbnail,scale=640:360\" -frames:v 1", outputFilePath, log);
+                var blob = dir.GetBlockBlobReference(outputBlobName);
+                await blob.UploadFromFileAsync(outputFilePath);
+                File.Delete(outputFilePath);
+            }
             return incomingFile + "-thumbnail.jpg";
         }
 

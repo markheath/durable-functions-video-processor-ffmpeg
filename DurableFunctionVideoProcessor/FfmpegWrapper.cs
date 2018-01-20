@@ -10,16 +10,10 @@ namespace DurableFunctionVideoProcessor
 {
     static class FfmpegWrapper
     {
-        public static async Task<string> Transcode(TranscodeParams transcodeParams, TraceWriter log)
+        public static async Task Transcode(string inputPath, string ffmpegParams, string outputFile, TraceWriter log)
         {
-            var outputFolder = Path.Combine(Path.GetTempPath(), "transcodes", $"{DateTime.Today:yyyy-MM-dd}");
-            Directory.CreateDirectory(outputFolder);
-            var outputFile = Path.Combine(outputFolder, $"{Guid.NewGuid()}{transcodeParams.OutputExtension}");
-            //var ffmpegParams = "-n -vcodec libx264 -strict -2 -c:a aac -pix_fmt yuv420p -crf 28 -preset veryfast -profile:v baseline -f mp4 -movflags faststart ";
-            var arguments = $"-i \"{transcodeParams.InputFile}\" {transcodeParams.FfmpegParams} {outputFile}";
-
+            var arguments = $"-i \"{inputPath}\" {ffmpegParams} \"{outputFile}\"";
             await RunFfmpeg(arguments, log);
-            return outputFile;
         }
 
         private static string GetFfmpegPath()
