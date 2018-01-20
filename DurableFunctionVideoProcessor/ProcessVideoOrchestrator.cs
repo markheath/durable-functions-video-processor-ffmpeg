@@ -22,7 +22,8 @@ namespace DurableFunctionVideoProcessor
                     ctx.CallSubOrchestratorAsync<string>("TranscodeOrchestrator",
                         videoLocation);
                 var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
-                    new RetryOptions(TimeSpan.FromSeconds(5), 4), transcodedLocation);
+                    new RetryOptions(TimeSpan.FromSeconds(5), 4), // {Handle = ex => ex.InnerException is InvalidOperationException}, - currently not possible #84
+                    transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>
                     ("PrependIntro", transcodedLocation);
                 var approvalInfo =

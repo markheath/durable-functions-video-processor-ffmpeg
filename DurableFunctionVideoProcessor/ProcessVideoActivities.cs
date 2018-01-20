@@ -128,5 +128,19 @@ namespace DurableFunctionVideoProcessor
         {
             log.Info($"Running the periodic activity {timesRun}");
         }
+
+        // simplistic example of activity function handling its own exceptions
+        /*
+        public static object TranscodeVideo2([ActivityTrigger] string input)
+        {
+            try
+            {
+                var output = PerformTranscode(input);
+                return new {Success = true, Output = output};
+            } catch (Exception e) {
+                return new { Success = false, Error = e.Message };
+            }
+        } */
+
     }
 }
