@@ -81,8 +81,14 @@ namespace DurableFunctionVideoProcessor
             [OrchestrationClient] DurableOrchestrationClient starter,
             TraceWriter log)
         {
-            //blob.GetSharedAccessSignature()
-            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", blob.StorageUri.PrimaryUri.AbsoluteUri);
+            var sas = blob.GetSharedAccessSignature(new SharedAccessBlobPolicy()
+            {
+                Permissions = SharedAccessBlobPermissions.Read,
+                SharedAccessStartTime = DateTimeOffset.UtcNow.AddMinutes(-5),
+                SharedAccessExpiryTime = DateTimeOffset.UtcNow.AddHours(2)
+            });
+            var location = blob.StorageUri.PrimaryUri.AbsoluteUri + sas;
+            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", location);
             log.Info($"Started an orchestration {orchestrationId} for uploaded video {name}");
         }
     }

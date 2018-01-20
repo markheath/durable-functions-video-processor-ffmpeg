@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Configuration;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -36,13 +38,26 @@ namespace DurableFunctionVideoProcessor
         [FunctionName("TranscodeVideo")]
         public static async Task<VideoFileInfo> TranscodeVideo(
             [ActivityTrigger] VideoFileInfo incomingFile,
+            [Blob("processed/transcoded")] CloudBlobDirectory dir,
             TraceWriter log)
         {
-            log.Info($"Transcoding {incomingFile.Location} to {incomingFile.BitRate}");
-            await Task.Delay(5000); // simulate some work
+            var transcodedBlobName = "transcoded-" + incomingFile.BitRate + ".mp4";
+            log.Info($"Transcoding {incomingFile.Location} to {incomingFile.BitRate} output {transcodedBlobName}");
+            if (ConfigurationManager.AppSettings["DemoMode"] == "true")
+            {
+                await Task.Delay(5000); // simulate some work
+            }
+            else
+            {
+                var output = await FfmpegWrapper.Transcode(incomingFile.Location, 28, log);
+                var blob = dir.GetBlockBlobReference(transcodedBlobName);
+                await blob.UploadFromFileAsync(output);
+                File.Delete(output);
+            }
+
             return new VideoFileInfo
             {
-                Location = incomingFile + "-transcoded.mp4",
+                Location = transcodedBlobName,
                 BitRate = incomingFile.BitRate
             };
         }
