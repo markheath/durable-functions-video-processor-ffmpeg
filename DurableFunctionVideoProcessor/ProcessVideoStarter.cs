@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -73,6 +74,16 @@ namespace DurableFunctionVideoProcessor
         {
             var instanceId = await client.StartNewAsync("PeriodicTaskOrchestrator", 0);
             return client.CreateCheckStatusResponse(req, instanceId);
+        }
+
+        [FunctionName("AutoProcessUploadedVideos")]
+        public static async Task AutoProcessUploadedVideos([BlobTrigger("uploads/{name}")] ICloudBlob blob, string name,
+            [OrchestrationClient] DurableOrchestrationClient starter,
+            TraceWriter log)
+        {
+            //blob.GetSharedAccessSignature()
+            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", blob.StorageUri.PrimaryUri.AbsoluteUri);
+            log.Info($"Started an orchestration {orchestrationId} for uploaded video {name}");
         }
     }
 }
