@@ -82,7 +82,7 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
 
-            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", ActivityHelpers.GetReadSas(blob, TimeSpan.FromHours(2)));
+            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", blob.GetReadSas(TimeSpan.FromHours(2)));
             log.Info($"Started an orchestration {orchestrationId} for uploaded video {name}");
         }
     }
