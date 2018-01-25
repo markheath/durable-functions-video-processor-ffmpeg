@@ -61,12 +61,48 @@ namespace DurableFunctionVideoProcessor
         [FunctionName("PrependIntro")]
         public static async Task<string> PrependIntro(
             [ActivityTrigger] string incomingFile,
+            [Blob("processed/final")] CloudBlobDirectory dir,
             TraceWriter log)
         {
             log.Info($"Prepending intro to {incomingFile}");
+            var outputBlobName = Path.GetFileNameWithoutExtension(incomingFile) + ".mp4";
             var introLocation = ConfigurationManager.AppSettings["IntroLocation"];
-            await Task.Delay(5000); // simulate some work
-            return incomingFile + "-with-intro.mp4";
+            if (string.IsNullOrEmpty(introLocation)) 
+                throw new InvalidOperationException("Missing intro video location");
+
+            if (Utils.IsInDemoMode)
+            {
+                await Task.Delay(5000); // simulate some work
+                return outputBlobName;
+            }
+            var outputBlob = dir.GetBlockBlobReference(outputBlobName);
+
+            var localIntro = "";
+            var localIncoming = "";
+            var localConcat = "";
+
+            try
+            {
+                localIntro = await Utils.DownloadToLocalFileAsync(introLocation);
+                localIncoming = await Utils.DownloadToLocalFileAsync(incomingFile);
+                localConcat = Utils.CreateLocalConcat(localIntro, localIncoming);
+                var transcodeParams = new TranscodeParams
+                {
+                    OutputExtension = ".mp4",
+                    InputFile = incomingFile,
+                    FfmpegParams = $"-f concat -safe 0 -i \"{localConcat}\" -codec copy "
+
+                    //InputFile = $"concat:{introLocation}|{incomingFile}", // doesn't work with Uris
+                    //FfmpegParams = "-codec copy"
+                    //InputFile = introLocation,
+                    //FfmpegParams = $"-i \"{incomingFile}\" -filter_complex \"[0:0] [0:1] [1:0] [1:1] concat=n=2:v=1:a=1 [v] [a]\" -map \"[v]\" -map \"[a]\""
+                };
+                return await Utils.TranscodeAndUpload(transcodeParams, outputBlob, log);
+            }
+            finally
+            {
+                Utils.TryDeleteFiles(log, localIntro, localIncoming, localConcat);
+            }
         }
 
         private static int extractCount = 0; // purely for demo purposes - don't use static variables in real world function app!

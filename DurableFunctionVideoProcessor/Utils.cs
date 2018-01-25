@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Configuration;
 using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.WindowsAzure.Storage.Blob;
@@ -30,6 +33,20 @@ namespace DurableFunctionVideoProcessor
             return location;
         }
 
+        private static HttpClient client;
+        public static async Task<string> DownloadToLocalFileAsync(string uri)
+        {
+            var extension = Path.GetExtension(new Uri(uri).LocalPath);
+            var outputFilePath = Path.Combine(GetTempTranscodeFolder(), $"{Guid.NewGuid()}{extension}");
+            client = client??new HttpClient();
+            using (var downloadStream = await client.GetStreamAsync(uri))
+            using (var s = File.OpenWrite(outputFilePath))
+            {
+                await downloadStream.CopyToAsync(s);
+            }
+            return outputFilePath;
+        }
+
         public static async Task<string> TranscodeAndUpload(TranscodeParams transcodeParams, ICloudBlob outputBlob, TraceWriter log)
         {
             var outputFilePath = Path.Combine(GetTempTranscodeFolder(), $"{Guid.NewGuid()}{transcodeParams.OutputExtension}");
@@ -40,21 +57,35 @@ namespace DurableFunctionVideoProcessor
             }
             finally
             {
+                TryDeleteFiles(log, outputFilePath);
+            }
+
+            return GetReadSas(outputBlob, TimeSpan.FromHours(2));
+        }
+
+        public static void TryDeleteFiles(TraceWriter log, params string[] files)
+        {
+            foreach (var file in files)
+            {
                 try
                 {
-                    if (File.Exists(outputFilePath))
+                    if (!String.IsNullOrEmpty(file) && File.Exists(file))
                     {
-                        File.Delete(outputFilePath);
+                        File.Delete(file);
                     }
                 }
                 catch (Exception e)
                 {
-                    log.Error($"Failed to clean up temporary file {outputFilePath}", e);
+                    log.Error($"Failed to clean up temporary file {file}", e);
                 }
             }
+        }
 
-            return GetReadSas(outputBlob, TimeSpan.FromHours(2));
-
+        public static string CreateLocalConcat(params string[] inputs)
+        {
+            var fileList = Path.Combine(GetTempTranscodeFolder(), $"{Guid.NewGuid()}.txt");
+            File.WriteAllLines(fileList, inputs.Select(f => $"file '{f}'"));
+            return fileList;
         }
     }
 }

@@ -12,7 +12,8 @@ namespace DurableFunctionVideoProcessor
     {
         public static async Task Transcode(string inputPath, string ffmpegParams, string outputFile, TraceWriter log)
         {
-            var arguments = $"-i \"{inputPath}\" {ffmpegParams} \"{outputFile}\"";
+            var prefix = ffmpegParams.Contains("-i ") ? "" : $"-i \"{inputPath}\" ";
+            var arguments = $"{prefix}{ffmpegParams} \"{outputFile}\"";
             await RunFfmpeg(arguments, log);
         }
 
