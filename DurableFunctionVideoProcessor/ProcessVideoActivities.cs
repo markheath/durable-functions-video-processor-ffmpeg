@@ -124,7 +124,7 @@ namespace DurableFunctionVideoProcessor
             }
 
             var outputBlob = dir.GetBlockBlobReference(outputBlobName);
-            var transcodeParams = new TranscodeParams()
+            var transcodeParams = new TranscodeParams
             {
                 OutputExtension = ".png",
                 InputFile = incomingFile,
@@ -144,7 +144,7 @@ namespace DurableFunctionVideoProcessor
         }
 
         [FunctionName("SendApprovalRequestEmail")]
-        public static async Task<string> SendApprovalRequestEmail(
+        public static async Task<int> SendApprovalRequestEmail(
             [ActivityTrigger] ApprovalInfo approvalInfo,
             TraceWriter log)
         {
@@ -158,7 +158,11 @@ namespace DurableFunctionVideoProcessor
                                + $"To reject click {rejectedLink}";
             log.Warning(emailContent);
             await Task.Delay(5000); // simulate sending email
-            return "Approval request sent";
+            var approvalTimeoutSeconds = ConfigurationManager.AppSettings["ApprovalTimeoutSeconds"];
+            if (string.IsNullOrEmpty(approvalTimeoutSeconds))
+                return 30;
+            return Int32.Parse(approvalTimeoutSeconds);
+
         }
 
         [FunctionName("PublishVideo")]

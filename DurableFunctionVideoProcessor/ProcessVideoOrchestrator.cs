@@ -28,9 +28,11 @@ namespace DurableFunctionVideoProcessor
                     transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>
                     ("PrependIntro", transcodedLocation);
+                // we need to give our suborchestrator its own id so we can send it events
+                // could be a new guid, but by basing it on the parent instance id we make it predictable
                 var approvalInfo =
-                    new ApprovalInfo {OrchestrationId = ctx.InstanceId, VideoLocation = withIntroLocation};
-                var approvalResult = await ctx.CallSubOrchestratorAsync<string>("GetApprovalResultOrchestrator", approvalInfo);
+                    new ApprovalInfo {OrchestrationId = "XYZ" + ctx.InstanceId, VideoLocation = withIntroLocation};
+                var approvalResult = await ctx.CallSubOrchestratorAsync<string>("GetApprovalResultOrchestrator", approvalInfo.OrchestrationId, approvalInfo);
 
                 if (approvalResult == "Approved")
                 {
@@ -78,12 +80,12 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
             var approvalInfo = ctx.GetInput<ApprovalInfo>();
-            await ctx.CallActivityAsync("SendApprovalRequestEmail", approvalInfo);
+            var emailTimeoutSeconds = await ctx.CallActivityAsync<int>("SendApprovalRequestEmail", approvalInfo);
 
             string approvalResult;
             using (var cts = new CancellationTokenSource())
             {
-                var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(30);
+                var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(emailTimeoutSeconds);
                 var timeoutTask = ctx.CreateTimer(timeoutAt, cts.Token);
                 var approvalTask = ctx.WaitForExternalEvent<string>("ApprovalResult");
 
@@ -91,10 +93,12 @@ namespace DurableFunctionVideoProcessor
                 if (winner == approvalTask)
                 {
                     approvalResult = approvalTask.Result;
+                    if (!ctx.IsReplaying) log.Warning($"Received an approval result of {approvalResult}");
                     cts.Cancel(); // we should cancel the timeout task
                 }
                 else
                 {
+                    if (!ctx.IsReplaying) log.Warning("Timed out waiting for an approval result");
                     approvalResult = "TimedOut";
                 }
             }

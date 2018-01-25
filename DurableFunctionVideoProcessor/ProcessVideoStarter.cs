@@ -59,6 +59,7 @@ namespace DurableFunctionVideoProcessor
                 return req.CreateResponse(HttpStatusCode.BadRequest,
                     "Need an approval result and an orchestration id");
 
+            log.Warning($"Sending approval result to {orchestrationId} of {result}");
             // send the ApprovalResult external event to this orchestration
             await client.RaiseEventAsync(orchestrationId, "ApprovalResult", result);
 
