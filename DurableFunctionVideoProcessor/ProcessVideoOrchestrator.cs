@@ -8,10 +8,10 @@ using Microsoft.Azure.WebJobs.Host;
 
 namespace DurableFunctionVideoProcessor
 {
-    public static class ProcessVideoOrchestrator
+    public static class ProcessVideoOrchestrators
     {
-        [FunctionName("ProcessVideoOrchestrator")]
-        public static async Task<object> Run(
+        [FunctionName(OrchestratorNames.ProcessVideo)]
+        public static async Task<object> ProcessVideo(
             [OrchestrationTrigger] DurableOrchestrationContext ctx,
             TraceWriter log)
         {
@@ -19,28 +19,28 @@ namespace DurableFunctionVideoProcessor
             try
             {
                 var transcodedLocations = await
-                    ctx.CallSubOrchestratorAsync<string[]>("TranscodeOrchestrator",
+                    ctx.CallSubOrchestratorAsync<string[]>(OrchestratorNames.Transcode,
                         videoLocation);
                 var transcodedLocation = transcodedLocations.First(x => x.Contains(".mp4")); // these are SAS tokens
 
-                var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>("ExtractThumbnail",
+                var thumbnailLocation = await ctx.CallActivityWithRetryAsync<string>(ActivityNames.ExtractThumbnail,
                     new RetryOptions(TimeSpan.FromSeconds(5), 4), // {Handle = ex => ex.InnerException is InvalidOperationException}, - currently not possible #84
                     transcodedLocation);
                 var withIntroLocation = await ctx.CallActivityAsync<string>
-                    ("PrependIntro", transcodedLocation);
+                    (ActivityNames.PrependIntro, transcodedLocation);
                 // we need to give our suborchestrator its own id so we can send it events
                 // could be a new guid, but by basing it on the parent instance id we make it predictable
                 var approvalInfo =
                     new ApprovalInfo {OrchestrationId = "XYZ" + ctx.InstanceId, VideoLocation = withIntroLocation};
-                var approvalResult = await ctx.CallSubOrchestratorAsync<string>("GetApprovalResultOrchestrator", approvalInfo.OrchestrationId, approvalInfo);
+                var approvalResult = await ctx.CallSubOrchestratorAsync<string>(OrchestratorNames.GetApprovalResult, approvalInfo.OrchestrationId, approvalInfo);
 
                 if (approvalResult == "Approved")
                 {
-                    await ctx.CallActivityAsync("PublishVideo",
+                    await ctx.CallActivityAsync(ActivityNames.PublishVideo,
                         new { transcodedLocation, thumbnailLocation, withIntroLocation });
                     return "Approved and published";
                 }
-                await ctx.CallActivityAsync("RejectVideo",
+                await ctx.CallActivityAsync(ActivityNames.RejectVideo,
                     new { transcodedLocation, thumbnailLocation, withIntroLocation });
                 return $"Not published because {approvalResult}";
 
@@ -49,45 +49,45 @@ namespace DurableFunctionVideoProcessor
             {
                 if (!ctx.IsReplaying)
                     log.Error("Failed to process video with error " + e.Message);
-                await ctx.CallActivityAsync("Cleanup", videoLocation);
+                await ctx.CallActivityAsync(ActivityNames.Cleanup, videoLocation);
                 return new {Error = "Failed to process video", e.Message};
             }
         }
 
-        [FunctionName("TranscodeOrchestrator")]
-        public static async Task<string[]> TranscodeOrchestrator(
+        [FunctionName(OrchestratorNames.Transcode)]
+        public static async Task<string[]> Transcode(
             [OrchestrationTrigger] DurableOrchestrationContext ctx,
             TraceWriter log)
         {
             var videoLocation = ctx.GetInput<string>();
             var transcodeProfiles = await
-                ctx.CallActivityAsync<TranscodeParams[]>("GetTranscodeProfiles", null);
+                ctx.CallActivityAsync<TranscodeParams[]>(ActivityNames.GetTranscodeProfiles, null);
             var transcodeTasks = new List<Task<string>>();
             foreach (var transcodeProfile in transcodeProfiles)
             {
                 transcodeProfile.InputFile = videoLocation;
                 var transcodeTask = ctx.CallActivityAsync<string>
-                    ("TranscodeVideo", transcodeProfile);
+                    (ActivityNames.TranscodeVideo, transcodeProfile);
                 transcodeTasks.Add(transcodeTask);
             }
             var locations = await Task.WhenAll(transcodeTasks);
             return locations;
         }
 
-        [FunctionName("GetApprovalResultOrchestrator")]
-        public static async Task<string> GetApprovalResultOrchestrator(
+        [FunctionName(OrchestratorNames.GetApprovalResult)]
+        public static async Task<string> GetApprovalResult(
             [OrchestrationTrigger] DurableOrchestrationContext ctx,
             TraceWriter log)
         {
             var approvalInfo = ctx.GetInput<ApprovalInfo>();
-            var emailTimeoutSeconds = await ctx.CallActivityAsync<int>("SendApprovalRequestEmail", approvalInfo);
+            var emailTimeoutSeconds = await ctx.CallActivityAsync<int>(ActivityNames.SendApprovalRequestEmail, approvalInfo);
 
             string approvalResult;
             using (var cts = new CancellationTokenSource())
             {
                 var timeoutAt = ctx.CurrentUtcDateTime.AddSeconds(emailTimeoutSeconds);
                 var timeoutTask = ctx.CreateTimer(timeoutAt, cts.Token);
-                var approvalTask = ctx.WaitForExternalEvent<string>("ApprovalResult");
+                var approvalTask = ctx.WaitForExternalEvent<string>(EventNames.ApprovalResult);
 
                 var winner = await Task.WhenAny(approvalTask, timeoutTask);
                 if (winner == approvalTask)
@@ -105,22 +105,23 @@ namespace DurableFunctionVideoProcessor
             return approvalResult;
         }
 
-        [FunctionName("PeriodicTaskOrchestrator")]
-        public static async Task<int> PeriodicTaskOrchestrator(
+        [FunctionName(OrchestratorNames.PeriodicTask)]
+        public static async Task<int> PeriodicTask(
             [OrchestrationTrigger] DurableOrchestrationContext ctx,
             TraceWriter log)
         {
             var timesRun = ctx.GetInput<int>();
             timesRun++;
             if (!ctx.IsReplaying)
-                log.Info($"Starting the PeriodicTaskOrchestrator {ctx.InstanceId}, {timesRun}");
-            await ctx.CallActivityAsync("PeriodicActivity", timesRun);
+                log.Info($"Starting the PeriodicTask orchestrator {ctx.InstanceId}, {timesRun}");
+            await ctx.CallActivityAsync(ActivityNames.PeriodicActivity, timesRun);
             var nextRun = ctx.CurrentUtcDateTime.AddSeconds(30);
             await ctx.CreateTimer(nextRun, CancellationToken.None);
             ctx.ContinueAsNew(timesRun);
             return timesRun;
         }
 
+        /** EXAMPLES
 
         /// <summary>
         /// In this example we call an activity that triggers some external action. 
@@ -173,5 +174,7 @@ namespace DurableFunctionVideoProcessor
             }
             return counterState;
         }
+
+        **/
     }
 }

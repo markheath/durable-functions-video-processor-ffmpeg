@@ -35,7 +35,7 @@ namespace DurableFunctionVideoProcessor
                     "Please pass a video location on the query string or in the request body");
 
             log.Info($"Attempting to start video processing for {video}.");
-            var instanceId = await starter.StartNewAsync("ProcessVideoOrchestrator", video);
+            var instanceId = await starter.StartNewAsync(OrchestratorNames.ProcessVideo, video);
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
 
@@ -61,7 +61,7 @@ namespace DurableFunctionVideoProcessor
 
             log.Warning($"Sending approval result to {orchestrationId} of {result}");
             // send the ApprovalResult external event to this orchestration
-            await client.RaiseEventAsync(orchestrationId, "ApprovalResult", result);
+            await client.RaiseEventAsync(orchestrationId, EventNames.ApprovalResult, result);
 
             return req.CreateResponse(HttpStatusCode.Accepted);
         }
@@ -73,7 +73,7 @@ namespace DurableFunctionVideoProcessor
             [OrchestrationClient] DurableOrchestrationClient client,
             TraceWriter log)
         {
-            var instanceId = await client.StartNewAsync("PeriodicTaskOrchestrator", 0);
+            var instanceId = await client.StartNewAsync(OrchestratorNames.PeriodicTask, 0);
             return client.CreateCheckStatusResponse(req, instanceId);
         }
 
@@ -83,7 +83,7 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
 
-            var orchestrationId = await starter.StartNewAsync("ProcessVideoOrchestrator", blob.GetReadSas(TimeSpan.FromHours(2)));
+            var orchestrationId = await starter.StartNewAsync(OrchestratorNames.ProcessVideo, blob.GetReadSas(TimeSpan.FromHours(2)));
             log.Info($"Started an orchestration {orchestrationId} for uploaded video {name}");
         }
     }

@@ -9,22 +9,9 @@ using Newtonsoft.Json;
 
 namespace DurableFunctionVideoProcessor
 {
-    public class TranscodeParams
-    {
-        public string InputFile { get; set; }
-        public string OutputExtension { get; set; }
-        public string FfmpegParams { get; set; }
-    }
-
-    public class ApprovalInfo
-    {
-        public string OrchestrationId { get; set; }
-        public string VideoLocation { get; set; }
-    }
-
     public static class ProcessVideoActivities
     {
-        [FunctionName("GetTranscodeProfiles")]
+        [FunctionName(ActivityNames.GetTranscodeProfiles)]
         public static TranscodeParams[] GetTranscodeProfiles(
             [ActivityTrigger] object input,
             TraceWriter log)
@@ -39,7 +26,7 @@ namespace DurableFunctionVideoProcessor
             return JsonConvert.DeserializeObject<TranscodeParams[]>(bitrates);
         }
 
-        [FunctionName("TranscodeVideo")]
+        [FunctionName(ActivityNames.TranscodeVideo)]
         public static async Task<string> TranscodeVideo(
             [ActivityTrigger] TranscodeParams transcodeParams,
             [Blob("processed/transcoded")] CloudBlobDirectory dir,
@@ -58,7 +45,7 @@ namespace DurableFunctionVideoProcessor
         }
 
 
-        [FunctionName("PrependIntro")]
+        [FunctionName(ActivityNames.PrependIntro)]
         public static async Task<string> PrependIntro(
             [ActivityTrigger] string incomingFile,
             [Blob("processed/final")] CloudBlobDirectory dir,
@@ -106,7 +93,7 @@ namespace DurableFunctionVideoProcessor
         }
 
         private static int extractCount = 0; // purely for demo purposes - don't use static variables in real world function app!
-        [FunctionName("ExtractThumbnail")]
+        [FunctionName(ActivityNames.ExtractThumbnail)]
         public static async Task<string> ExtractThumbnail(
             [ActivityTrigger] string incomingFile,
             [Blob("processed/thumbnails")] CloudBlobDirectory dir,
@@ -133,7 +120,7 @@ namespace DurableFunctionVideoProcessor
             return await Utils.TranscodeAndUpload(transcodeParams, outputBlob, log);
         }
 
-        [FunctionName("Cleanup")]
+        [FunctionName(ActivityNames.Cleanup)]
         public static async Task<string> Cleanup(
             [ActivityTrigger] string incomingFile,
             TraceWriter log)
@@ -143,7 +130,7 @@ namespace DurableFunctionVideoProcessor
             return "Finished";
         }
 
-        [FunctionName("SendApprovalRequestEmail")]
+        [FunctionName(ActivityNames.SendApprovalRequestEmail)]
         public static async Task<int> SendApprovalRequestEmail(
             [ActivityTrigger] ApprovalInfo approvalInfo,
             TraceWriter log)
@@ -165,7 +152,7 @@ namespace DurableFunctionVideoProcessor
 
         }
 
-        [FunctionName("PublishVideo")]
+        [FunctionName(ActivityNames.PublishVideo)]
         public static async Task<string> PublishVideo(
             [ActivityTrigger] object videoLocations,
             TraceWriter log)
@@ -175,7 +162,7 @@ namespace DurableFunctionVideoProcessor
             return "The video is live";
         }
 
-        [FunctionName("RejectVideo")]
+        [FunctionName(ActivityNames.RejectVideo)]
         public static async Task<string> RejectVideo(
             [ActivityTrigger] object videoLocations,
             TraceWriter log)
@@ -186,7 +173,7 @@ namespace DurableFunctionVideoProcessor
         }
 
 
-        [FunctionName("PeriodicActivity")]
+        [FunctionName(ActivityNames.PeriodicActivity)]
         public static void PeriodicActivity(
             [ActivityTrigger] int timesRun,
             TraceWriter log)

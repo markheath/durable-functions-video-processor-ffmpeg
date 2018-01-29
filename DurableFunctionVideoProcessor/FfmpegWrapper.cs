@@ -29,9 +29,9 @@ namespace DurableFunctionVideoProcessor
 
         public static string GetAssemblyDirectory()
         {
-            string codeBase = typeof(FfmpegWrapper).Assembly.CodeBase;
+            var codeBase = typeof(FfmpegWrapper).Assembly.CodeBase;
             var uri = new UriBuilder(codeBase);
-            string path = Uri.UnescapeDataString(uri.Path);
+            var path = Uri.UnescapeDataString(uri.Path);
             return Path.GetDirectoryName(path);
         }
 
