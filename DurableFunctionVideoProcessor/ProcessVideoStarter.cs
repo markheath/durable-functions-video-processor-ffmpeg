@@ -68,7 +68,7 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName("StartPeriodicTask")]
         public static async Task<HttpResponseMessage> StartPeriodicTask(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)]
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)]
             HttpRequestMessage req,
             [OrchestrationClient] DurableOrchestrationClient client,
             TraceWriter log)
