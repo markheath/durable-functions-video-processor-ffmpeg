@@ -37,7 +37,7 @@ namespace DurableFunctionVideoProcessor
             if (Utils.IsInDemoMode)
             {
                 await Task.Delay(5000); // simulate some work
-                return $"{Guid.NewGuid()}{transcodeParams.OutputExtension}";
+                return $"{Path.GetFileNameWithoutExtension(transcodeParams.InputFile)}{Guid.NewGuid():N}{transcodeParams.OutputExtension}";
             }
 
             var outputBlob = dir.GetBlockBlobReference(outputBlobName);
