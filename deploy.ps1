@@ -18,3 +18,16 @@ az group deployment create -g $resourceGroup `
 
 
 #az functionapp config appsettings set IntroLocation=$introLocation
+
+
+# to build
+. "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe" /p:Configuration=Release
+
+# create a zip
+$publishFolder = "$(pwd)\DurableFunctionVideoProcessor\bin\Release\net461"
+$destination = "$(pwd)\publish.zip"
+Add-Type -assembly "system.io.compression.filesystem"
+[io.compression.zipfile]::CreateFromDirectory($publishFolder, $destination)
+
+az functionapp deployment source config-zip `
+    -n $appName -g $resourceGroup --src $destination
