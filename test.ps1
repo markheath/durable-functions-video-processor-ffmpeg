@@ -53,10 +53,10 @@ Invoke-RestMethod -Method POST -Uri $approvalUri -ContentType "application/json"
 # terminate the orchestration
 Invoke-WebRequest -Method POST -Uri $orchestrationInfo.terminatePostUri.Replace("{text}","Abandoned")
 
-# Start the periodic task
+# Start the periodic task, (n.b. this one currently requires a get)
 $code =  getFunctionKey "StartPeriodicTask" $kuduCreds
-$starterFunc = "https://$appName.azurewebsites.net/api/StartPeriodicTask?code=$code2"
-$orchestrationInfo2 = Invoke-RestMethod -Method POST -Uri "$starterFunc"
+$starterFunc = "https://$appName.azurewebsites.net/api/StartPeriodicTask?code=$code"
+$orchestrationInfo2 = Invoke-RestMethod -Method GET -Uri "$starterFunc"
 
 # check up on it
 Invoke-RestMethod -Uri $orchestrationInfo2.statusQueryGetUri
