@@ -102,6 +102,14 @@
             {
               "name": "DemoMode",
               "value": "true"
+            },
+            {
+              "name": "IntroLocation",
+              "value": "example.mp4"
+            },
+            {
+              "name": "ApprovalTimeoutSeconds",
+              "value": 300
             }
 
           ]

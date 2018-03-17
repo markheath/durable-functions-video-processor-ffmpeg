@@ -26,6 +26,7 @@ az group deployment create -g $resourceGroup `
 # create a zip
 $publishFolder = "$(pwd)\DurableFunctionVideoProcessor\bin\Release\net461"
 $destination = "$(pwd)\publish.zip"
+If (Test-Path $destination){ Remove-Item $destination }
 Add-Type -assembly "system.io.compression.filesystem"
 [io.compression.zipfile]::CreateFromDirectory($publishFolder, $destination)
 

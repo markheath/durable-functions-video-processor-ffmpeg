@@ -98,7 +98,7 @@ namespace DurableFunctionVideoProcessor
                 }
                 else
                 {
-                    if (!ctx.IsReplaying) log.Warning("Timed out waiting for an approval result");
+                    if (!ctx.IsReplaying) log.Warning($"Timed out waiting {emailTimeoutSeconds}s for an approval result");
                     approvalResult = "TimedOut";
                 }
             }

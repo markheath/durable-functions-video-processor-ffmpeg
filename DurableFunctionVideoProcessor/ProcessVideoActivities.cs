@@ -136,7 +136,7 @@ namespace DurableFunctionVideoProcessor
             TraceWriter log)
         {
             log.Info($"Sending approval request for {approvalInfo.VideoLocation}");
-            var host = Environment.GetEnvironmentVariable("HTTP_HOST") ?? "localhost:7071";
+            var host = Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost:7071";
             var functionAddress = $"http://{host}/api/SubmitVideoApproval?id={approvalInfo.OrchestrationId}";
             var approvedLink = functionAddress + "&result=Approved";
             var rejectedLink = functionAddress + "&result=Rejected";
