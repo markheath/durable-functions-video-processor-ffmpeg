@@ -3,7 +3,40 @@
 $resourceGroup = "dfvp-test2"
 $appName = "dfvptest2"
 
-$code = "TODO: your code here"
+# secrets are stored in D:\home\data\Functions\secrets\{functionname}.json
+# https://github.com/Azure/azure-functions-host/issues/1952
+# https://stackoverflow.com/a/46436102/7532
+
+
+# get the deployment credentials
+function getKuduCreds()
+{
+    $user = az webapp deployment list-publishing-profiles -n $appName -g $resourceGroup `
+            --query "[?publishMethod=='MSDeploy'].userName" -o tsv
+
+    $pass = az webapp deployment list-publishing-profiles -n $appName -g $resourceGroup `
+            --query "[?publishMethod=='MSDeploy'].userPWD" -o tsv
+
+    $pair = "$($user):$($pass)"
+    $encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+    return $encodedCreds
+}
+
+function getFunctionKey([string]$functionName, [string]$encodedCreds)
+{
+    $jwt = Invoke-RestMethod -Uri "https://$appName.scm.azurewebsites.net/api/functions/admin/token" -Headers @{Authorization=("Basic {0}" -f $encodedCreds)} -Method GET
+
+    $keys = Invoke-RestMethod -Method GET -Headers @{Authorization=("Bearer {0}" -f $jwt)} `
+            -Uri "https://$appName.azurewebsites.net/admin/functions/$functionName/keys" 
+
+    $code = $keys.keys[0].value
+    return $code
+}
+
+
+# todo: automate retrieval of key with https://github.com/Azure/azure-functions-host/wiki/Key-management-API
+$kuduCreds = getKuduCreds
+$code =  getFunctionKey "ProcessVideoStarter" $kuduCreds
 $starterFunc = "https://$appName.azurewebsites.net/api/ProcessVideoStarter?code=$code"
 
 # start the video processing orchestrator
@@ -19,3 +52,14 @@ Invoke-RestMethod -Method POST -Uri $approvalUri -ContentType "application/json"
 
 # terminate the orchestration
 Invoke-WebRequest -Method POST -Uri $orchestrationInfo.terminatePostUri.Replace("{text}","Abandoned")
+
+# Start the periodic task
+$code =  getFunctionKey "StartPeriodicTask" $kuduCreds
+$starterFunc = "https://$appName.azurewebsites.net/api/StartPeriodicTask?code=$code2"
+$orchestrationInfo2 = Invoke-RestMethod -Method POST -Uri "$starterFunc"
+
+# check up on it
+Invoke-RestMethod -Uri $orchestrationInfo2.statusQueryGetUri
+
+# terminate the orchestration
+Invoke-WebRequest -Method POST -Uri $orchestrationInfo2.terminatePostUri.Replace("{text}","Abandoned")
