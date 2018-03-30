@@ -34,9 +34,9 @@ function getFunctionKey([string]$functionName, [string]$encodedCreds)
 }
 
 
-# todo: automate retrieval of key with https://github.com/Azure/azure-functions-host/wiki/Key-management-API
+# automate retrieval of key with https://github.com/Azure/azure-functions-host/wiki/Key-management-API
 $kuduCreds = getKuduCreds
-$code =  getFunctionKey "ProcessVideoStarter" $kuduCreds
+$code = getFunctionKey "ProcessVideoStarter" $kuduCreds
 $starterFunc = "https://$appName.azurewebsites.net/api/ProcessVideoStarter?code=$code"
 
 # start the video processing orchestrator

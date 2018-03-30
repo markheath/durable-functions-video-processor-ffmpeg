@@ -20,8 +20,8 @@ az group deployment create -g $resourceGroup `
 #az functionapp config appsettings set IntroLocation=$introLocation
 
 
-# to build
-. "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe" /p:Configuration=Release
+# to build (n.b. don't know why RunCodeAnalysis has got turned on - can't work out how to disable)
+. "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe" /p:Configuration=Release /p:RunCodeAnalysis=False
 
 # create a zip
 $publishFolder = "$(pwd)\DurableFunctionVideoProcessor\bin\Release\net461"
