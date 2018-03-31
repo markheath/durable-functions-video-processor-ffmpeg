@@ -45,6 +45,10 @@ $orchestrationInfo = Invoke-RestMethod -Method POST -Uri "$starterFunc&video=exa
 # check up on it
 Invoke-RestMethod -Uri $orchestrationInfo.statusQueryGetUri
 
+# https://docs.microsoft.com/en-us/azure/azure-functions/durable-functions-http-api
+Start-Process "$($orchestrationInfo.statusQueryGetUri)&showHistory=true" 
+Start-Process -Uri "$($orchestrationInfo.statusQueryGetUri)&showHistory=true&showHistoryOutput=true" 
+
 # send an approval
 $orchestrationId = $orchestrationInfo.id
 $approvalUri = $orchestrationInfo.sendEventPostUri.Replace("{eventName}","ApprovalResult").Replace($orchestrationId, "XYZ$orchestrationId")
