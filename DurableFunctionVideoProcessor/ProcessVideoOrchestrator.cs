@@ -41,7 +41,7 @@ namespace DurableFunctionVideoProcessor
                     return "Approved and published";
                 }
                 await ctx.CallActivityAsync(ActivityNames.RejectVideo,
-                    new { transcodedLocation, thumbnailLocation, withIntroLocation });
+                    new [] { transcodedLocation, thumbnailLocation, withIntroLocation });
                 return $"Not published because {approvalResult}";
 
             }

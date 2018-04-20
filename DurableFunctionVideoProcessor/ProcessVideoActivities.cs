@@ -108,21 +108,21 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName(ActivityNames.PublishVideo)]
         public static async Task<string> PublishVideo(
-            [ActivityTrigger] object videoLocations,
+            [ActivityTrigger] string[] mediaLocations,
             TraceWriter log)
         {
             log.Info("Publishing video");
-            await Task.Delay(5000); // simulate publishing video
+            await videoProcessor.PublishVideo(mediaLocations);
             return "The video is live";
         }
 
         [FunctionName(ActivityNames.RejectVideo)]
         public static async Task<string> RejectVideo(
-            [ActivityTrigger] object videoLocations,
+            [ActivityTrigger] string[] mediaLocations,
             TraceWriter log)
         {
             log.Info("Rejecting video");
-            await Task.Delay(5000); // simulate deleting videos
+            await videoProcessor.RejectVideo(mediaLocations);
             return "All temporary files have been deleted";
         }
 

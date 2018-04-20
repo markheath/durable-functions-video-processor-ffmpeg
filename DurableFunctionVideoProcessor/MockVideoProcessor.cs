@@ -29,5 +29,17 @@ namespace DurableFunctionVideoProcessor
             await Task.Delay(5000); // simulate some work
             return outputBlob.Name;
         }
+
+        public Task PublishVideo(string[] videoLocations)
+        {
+            // TODO: move files to new location
+            return Task.Delay(5000);
+        }
+
+        public Task RejectVideo(string[] videoLocations)
+        {
+            // TODO: move files to rejected location
+            return Task.Delay(5000);
+        }
     }
 }

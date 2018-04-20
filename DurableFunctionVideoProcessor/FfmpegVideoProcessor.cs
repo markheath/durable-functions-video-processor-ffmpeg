@@ -52,5 +52,17 @@ namespace DurableFunctionVideoProcessor
             };
             return await Utils.TranscodeAndUpload(transcodeParams, outputBlob, log);
         }
+
+        public Task PublishVideo(string[] videoLocations)
+        {
+            // TODO: move files to new location
+            return Task.Delay(5000);
+        }
+
+        public Task RejectVideo(string[] videoLocations)
+        {
+            // TODO: move files to rejected location
+            return Task.Delay(5000);
+        }
     }
 }
