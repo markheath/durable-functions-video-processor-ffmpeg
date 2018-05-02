@@ -33,7 +33,10 @@ Example contents of a `local.settings.json` file working with local storage (rem
     "TranscodeProfiles": "[\r\n      {\r\n        \"OutputExtension\": \".mp4\",\r\n        \"FfmpegParams\": \"-vcodec libx264 -strict -2 -c:a aac -pix_fmt yuv420p -crf 28 -preset veryfast -profile:v baseline -f mp4 -movflags faststart\"\r\n      },\r\n      {\r\n        \"OutputExtension\": \".mp3\",\r\n        \"FfmpegParams\": \"-acodec libmp3lame -q:a 6\"\r\n      }\r\n    ]",
     "IntroLocation": "http://127.0.0.1:10000/devstoreaccount1/public/intro.mp4",
     "DemoMode":  "true",
-    "ApprovalTimeoutSeconds": 300 
+    "ApprovalTimeoutSeconds": 300,
+    "SendGridKey": "your-secret-sendgrid-key",
+    "ApproverEmail": "your@email.com",
+    "SenderEmail":  "example@sender.com" 
   }
 }
 ```

@@ -41,27 +41,25 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName("SubmitVideoApproval")]
         public static async Task<HttpResponseMessage> SubmitVideoApproval(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)]
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "SubmitVideoApproval/{id}")]
             HttpRequestMessage req,
             [OrchestrationClient] DurableOrchestrationClient client,
+            [Table("Approvals", "Approval", "{id}", Connection = "AzureWebJobsStorage")] Approval approval,
             TraceWriter log)
         {
+            // nb if the approval code doesn't exist, framework just returns a 404 before we get here
             // parse query parameter
             string result = req.GetQueryNameValuePairs()
                 .FirstOrDefault(q => string.Compare(q.Key, "result", true) == 0)
                 .Value;
 
-            string orchestrationId = req.GetQueryNameValuePairs()
-                .FirstOrDefault(q => string.Compare(q.Key, "id", true) == 0)
-                .Value;
-
-            if (result == null || orchestrationId == null)
+            if (result == null)
                 return req.CreateResponse(HttpStatusCode.BadRequest,
-                    "Need an approval result and an orchestration id");
+                    "Need an approval result");
 
-            log.Warning($"Sending approval result to {orchestrationId} of {result}");
+            log.Warning($"Sending approval result to {approval.OrchestrationId} of {result}");
             // send the ApprovalResult external event to this orchestration
-            await client.RaiseEventAsync(orchestrationId, EventNames.ApprovalResult, result);
+            await client.RaiseEventAsync(approval.OrchestrationId, EventNames.ApprovalResult, result);
 
             return req.CreateResponse(HttpStatusCode.Accepted);
         }

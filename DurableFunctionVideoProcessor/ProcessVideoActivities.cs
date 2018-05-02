@@ -6,6 +6,7 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
+using SendGrid.Helpers.Mail;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -85,21 +86,37 @@ namespace DurableFunctionVideoProcessor
             return "Finished";
         }
 
+        // sendgrid binding - see https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-sendgrid
+        // install SendGrid and Microsoft.Azure.WebJobs.Extensions
         [FunctionName(ActivityNames.SendApprovalRequestEmail)]
-        public static async Task<int> SendApprovalRequestEmail(
+        public static int SendApprovalRequestEmail(
             [ActivityTrigger] ApprovalInfo approvalInfo,
+            [SendGrid(ApiKey = "SendGridKey")] out Mail message,
+            [Table("Approvals", "AzureWebJobsStorage")] out Approval approval,
             TraceWriter log)
         {
+            var approvalCode = Guid.NewGuid().ToString("N");
+            approval = new Approval
+            {
+                PartitionKey = "Approval",
+                RowKey = approvalCode,
+                OrchestrationId = approvalInfo.OrchestrationId
+            };
+            var approverEmail = new Email(ConfigurationManager.AppSettings["ApproverEmail"]);
+            var senderEmail = new Email(ConfigurationManager.AppSettings["SenderEmail"]);
+            var subject = "A video is awaiting approval";
             log.Info($"Sending approval request for {approvalInfo.VideoLocation}");
             var host = Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost:7071";
-            var functionAddress = $"http://{host}/api/SubmitVideoApproval?id={approvalInfo.OrchestrationId}";
-            var approvedLink = functionAddress + "&result=Approved";
-            var rejectedLink = functionAddress + "&result=Rejected";
-            var emailContent = $"Please review {approvalInfo.VideoLocation}\n"
-                               + $"To approve click {approvedLink}\n"
-                               + $"To reject click {rejectedLink}";
-            log.Warning(emailContent);
-            await Task.Delay(5000); // simulate sending email
+            var functionAddress = $"http://{host}/api/SubmitVideoApproval/{approvalCode}";
+            var approvedLink = functionAddress + "?result=Approved";
+            var rejectedLink = functionAddress + "?result=Rejected";
+            var body = $"Please review {approvalInfo.VideoLocation}<br>"
+                               + $"<a href=\"{approvedLink}\">Approve</a><br>"
+                               + $"<a href=\"{rejectedLink}\">Reject</a>";
+            var content = new Content("text/html", body);
+            message = new Mail(senderEmail, subject, approverEmail, content);
+
+            log.Warning(body);
             var approvalTimeoutSeconds = ConfigurationManager.AppSettings["ApprovalTimeoutSeconds"];
             if (string.IsNullOrEmpty(approvalTimeoutSeconds))
                 return 30;
