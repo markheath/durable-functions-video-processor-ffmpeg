@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Configuration;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using SendGrid.Helpers.Mail;
@@ -18,9 +19,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.GetTranscodeProfiles)]
         public static TranscodeParams[] GetTranscodeProfiles(
             [ActivityTrigger] object input,
-            TraceWriter log)
+            ILogger log)
         {
-            var bitrates = ConfigurationManager.AppSettings["TranscodeProfiles"];
+            var bitrates = Environment.GetEnvironmentVariable("TranscodeProfiles");
             if (String.IsNullOrEmpty(bitrates))
                 return new []
                 {
@@ -36,11 +37,11 @@ namespace DurableFunctionVideoProcessor
         public static async Task<string> TranscodeVideo(
             [ActivityTrigger] TranscodeParams transcodeParams,
             [Blob("processed/transcoded")] CloudBlobDirectory dir,
-            TraceWriter log)
+            ILogger log)
         {
             var outputBlobName = Path.GetFileNameWithoutExtension(transcodeParams.InputFile) + 
                                  transcodeParams.OutputExtension;
-            log.Info($"Transcoding {transcodeParams.InputFile} with params " +
+            log.LogInformation($"Transcoding {transcodeParams.InputFile} with params " +
                      $"{transcodeParams.FfmpegParams} with extension {transcodeParams.OutputExtension}");
             var outputBlob = dir.GetBlockBlobReference(outputBlobName);
 
@@ -52,11 +53,11 @@ namespace DurableFunctionVideoProcessor
         public static async Task<string> PrependIntro(
             [ActivityTrigger] string incomingFile,
             [Blob("processed/final")] CloudBlobDirectory dir,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info($"Prepending intro to {incomingFile}");
+            log.LogInformation($"Prepending intro to {incomingFile}");
             var outputBlobName = Path.GetFileNameWithoutExtension(incomingFile) + ".mp4";
-            var introLocation = ConfigurationManager.AppSettings["IntroLocation"];
+            var introLocation = Environment.GetEnvironmentVariable("IntroLocation");
             if (string.IsNullOrEmpty(introLocation)) 
                 throw new InvalidOperationException("Missing intro video location");
 
@@ -68,9 +69,9 @@ namespace DurableFunctionVideoProcessor
         public static async Task<string> ExtractThumbnail(
             [ActivityTrigger] string incomingFile,
             [Blob("processed/thumbnails")] CloudBlobDirectory dir,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info($"Extracting thumbnail from {incomingFile}");
+            log.LogInformation($"Extracting thumbnail from {incomingFile}");
             var outputBlobName = Path.GetFileNameWithoutExtension(incomingFile) + "-thumbnail.png";
             var outputBlob = dir.GetBlockBlobReference(outputBlobName);
             return await videoProcessor.ExtractThumbnailAsync(incomingFile, outputBlob, log);
@@ -79,9 +80,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.Cleanup)]
         public static async Task<string> Cleanup(
             [ActivityTrigger] string incomingFile,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info($"Cleaning up {incomingFile}");
+            log.LogInformation($"Cleaning up {incomingFile}");
             await Task.Delay(5000); // simulate some work
             return "Finished";
         }
@@ -91,9 +92,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.SendApprovalRequestEmail)]
         public static int SendApprovalRequestEmail(
             [ActivityTrigger] ApprovalInfo approvalInfo,
-            [SendGrid(ApiKey = "SendGridKey")] out Mail message,
+            [SendGrid(ApiKey = "SendGridKey")] out SendGridMessage message,
             [Table("Approvals", "AzureWebJobsStorage")] out Approval approval,
-            TraceWriter log)
+            ILogger log)
         {
             var approvalCode = Guid.NewGuid().ToString("N");
             approval = new Approval
@@ -102,10 +103,10 @@ namespace DurableFunctionVideoProcessor
                 RowKey = approvalCode,
                 OrchestrationId = approvalInfo.OrchestrationId
             };
-            var approverEmail = new Email(ConfigurationManager.AppSettings["ApproverEmail"]);
-            var senderEmail = new Email(ConfigurationManager.AppSettings["SenderEmail"]);
+            var approverEmail = new EmailAddress(Environment.GetEnvironmentVariable("ApproverEmail"));
+            var senderEmail = new EmailAddress(Environment.GetEnvironmentVariable("SenderEmail"));
             var subject = "A video is awaiting approval";
-            log.Info($"Sending approval request for {approvalInfo.VideoLocation}");
+            log.LogInformation($"Sending approval request for {approvalInfo.VideoLocation}");
             var host = Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost:7071";
             var functionAddress = $"http://{host}/api/SubmitVideoApproval/{approvalCode}";
             var approvedLink = functionAddress + "?result=Approved";
@@ -113,11 +114,14 @@ namespace DurableFunctionVideoProcessor
             var body = $"Please review {approvalInfo.VideoLocation}<br>"
                                + $"<a href=\"{approvedLink}\">Approve</a><br>"
                                + $"<a href=\"{rejectedLink}\">Reject</a>";
-            var content = new Content("text/html", body);
-            message = new Mail(senderEmail, subject, approverEmail, content);
+            message = new SendGridMessage();
+            message.Subject = subject;
+            message.From = senderEmail;
+            message.AddTo(approverEmail);
+            message.HtmlContent = body;
 
-            log.Warning(body);
-            var approvalTimeoutSeconds = ConfigurationManager.AppSettings["ApprovalTimeoutSeconds"];
+            log.LogWarning(body);
+            var approvalTimeoutSeconds = Environment.GetEnvironmentVariable("ApprovalTimeoutSeconds");
             if (string.IsNullOrEmpty(approvalTimeoutSeconds))
                 return 30;
             return Int32.Parse(approvalTimeoutSeconds);
@@ -126,9 +130,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.PublishVideo)]
         public static async Task<string> PublishVideo(
             [ActivityTrigger] string[] mediaLocations,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info("Publishing video");
+            log.LogInformation("Publishing video");
             await videoProcessor.PublishVideo(mediaLocations);
             return "The video is live";
         }
@@ -136,9 +140,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.RejectVideo)]
         public static async Task<string> RejectVideo(
             [ActivityTrigger] string[] mediaLocations,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info("Rejecting video");
+            log.LogInformation("Rejecting video");
             await videoProcessor.RejectVideo(mediaLocations);
             return "All temporary files have been deleted";
         }
@@ -147,9 +151,9 @@ namespace DurableFunctionVideoProcessor
         [FunctionName(ActivityNames.PeriodicActivity)]
         public static void PeriodicActivity(
             [ActivityTrigger] int timesRun,
-            TraceWriter log)
+            ILogger log)
         {
-            log.Info($"Running the periodic activity {timesRun}");
+            log.LogInformation($"Running the periodic activity {timesRun}");
         }
 
         // simplistic example of activity function handling its own exceptions

@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace DurableFunctionVideoProcessor
@@ -13,77 +14,68 @@ namespace DurableFunctionVideoProcessor
     public static class ProcessVideoFunctions
     {
         [FunctionName("ProcessVideoStarter")]
-        public static async Task<HttpResponseMessage> ProcessVideoStarter(
+        public static async Task<IActionResult> ProcessVideoStarter(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post",
-                Route = null)] HttpRequestMessage req,
-            [OrchestrationClient] DurableOrchestrationClient starter,
-            TraceWriter log)
+                Route = null)] HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient starter,
+            ILogger log)
         {
             // parse query parameter
-            string video = req.GetQueryNameValuePairs()
-                .FirstOrDefault(q => string.Compare(q.Key, "video", true) == 0)
-                .Value;
-
-            // Get request body
-            dynamic data = await req.Content.ReadAsAsync<object>();
-
-            // Set name to query string or body data
-            video = video ?? data?.video;
+            string video = req.GetQueryParameterDictionary()["video"];
 
             if (video == null)
-                return req.CreateResponse(HttpStatusCode.BadRequest,
-                    "Please pass a video location on the query string or in the request body");
+                return new BadRequestObjectResult("Please pass a video location on the query string");
 
-            log.Info($"Attempting to start video processing for {video}.");
+            log.LogInformation($"Attempting to start video processing for {video}.");
             var instanceId = await starter.StartNewAsync(OrchestratorNames.ProcessVideo, video);
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
 
         [FunctionName("SubmitVideoApproval")]
-        public static async Task<HttpResponseMessage> SubmitVideoApproval(
+        public static async Task<IActionResult> SubmitVideoApproval(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "SubmitVideoApproval/{id}")]
-            HttpRequestMessage req,
-            [OrchestrationClient] DurableOrchestrationClient client,
+            HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient client,
             [Table("Approvals", "Approval", "{id}", Connection = "AzureWebJobsStorage")] Approval approval,
-            TraceWriter log)
+            ILogger log)
         {
             // nb if the approval code doesn't exist, framework just returns a 404 before we get here
             // parse query parameter
-            string result = req.GetQueryNameValuePairs()
+            string result = req.GetQueryParameterDictionary()
                 .FirstOrDefault(q => string.Compare(q.Key, "result", true) == 0)
                 .Value;
 
             if (result == null)
-                return req.CreateResponse(HttpStatusCode.BadRequest,
-                    "Need an approval result");
+                return new BadRequestObjectResult("Need an approval result");
 
-            log.Warning($"Sending approval result to {approval.OrchestrationId} of {result}");
+            log.LogWarning($"Sending approval result to {approval.OrchestrationId} of {result}");
             // send the ApprovalResult external event to this orchestration
             await client.RaiseEventAsync(approval.OrchestrationId, EventNames.ApprovalResult, result);
 
-            return req.CreateResponse(HttpStatusCode.Accepted);
+            return new AcceptedResult();
         }
 
         [FunctionName("StartPeriodicTask")]
-        public static async Task<HttpResponseMessage> StartPeriodicTask(
+        public static async Task<IActionResult> StartPeriodicTask(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)]
-            HttpRequestMessage req,
-            [OrchestrationClient] DurableOrchestrationClient client,
-            TraceWriter log)
+            HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient client,
+            ILogger log)
         {
-            var instanceId = await client.StartNewAsync(OrchestratorNames.PeriodicTask, 0);
+            var instanceId = "PeriodicTask"; // use a fixed id, making it easier for us to terminate
+            await client.StartNewAsync(OrchestratorNames.PeriodicTask, instanceId, 0);
             return client.CreateCheckStatusResponse(req, instanceId);
         }
 
         [FunctionName("AutoProcessUploadedVideos")]
         public static async Task AutoProcessUploadedVideos([BlobTrigger("uploads/{name}")] ICloudBlob blob, string name,
-            [OrchestrationClient] DurableOrchestrationClient starter,
-            TraceWriter log)
+            [DurableClient] IDurableOrchestrationClient starter,
+            ILogger log)
         {
 
             var orchestrationId = await starter.StartNewAsync(OrchestratorNames.ProcessVideo, 
                 blob.GetReadSas(TimeSpan.FromHours(2)));
-            log.Info($"Started an orchestration {orchestrationId} for uploaded video {name}");
+            log.LogInformation($"Started an orchestration {orchestrationId} for uploaded video {name}");
         }
     }
 }

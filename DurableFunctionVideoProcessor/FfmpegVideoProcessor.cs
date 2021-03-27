@@ -1,18 +1,19 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace DurableFunctionVideoProcessor
 {
     class FfmpegVideoProcessor : IVideoProcessor
     {
-        public async Task<string> TranscodeAsync(TranscodeParams transcodeParams, ICloudBlob outputBlob, TraceWriter log)
+        public async Task<string> TranscodeAsync(TranscodeParams transcodeParams, ICloudBlob outputBlob, ILogger log)
         {
             return await Utils.TranscodeAndUpload(transcodeParams, outputBlob, log);
         }
 
         public async Task<string> PrependIntroAsync(CloudBlockBlob outputBlob, string introLocation, 
-            string incomingFile, TraceWriter log)
+            string incomingFile, ILogger log)
         {
             var localIntro = "";
             var localIncoming = "";
@@ -42,7 +43,7 @@ namespace DurableFunctionVideoProcessor
             }
         }
 
-        public async Task<string> ExtractThumbnailAsync(string incomingFile, CloudBlockBlob outputBlob, TraceWriter log)
+        public async Task<string> ExtractThumbnailAsync(string incomingFile, CloudBlockBlob outputBlob, ILogger log)
         {
             var transcodeParams = new TranscodeParams
             {

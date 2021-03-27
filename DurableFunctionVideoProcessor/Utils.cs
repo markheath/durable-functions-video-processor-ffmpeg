@@ -1,17 +1,16 @@
 ﻿using System;
-using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace DurableFunctionVideoProcessor
 {
     static class Utils
     {
-        public static bool IsInDemoMode => ConfigurationManager.AppSettings["DemoMode"] == "true";
+        public static bool IsInDemoMode => Environment.GetEnvironmentVariable("DemoMode") == "true";
 
         private static string GetTempTranscodeFolder()
         {
@@ -46,7 +45,7 @@ namespace DurableFunctionVideoProcessor
             return outputFilePath;
         }
 
-        public static async Task<string> TranscodeAndUpload(TranscodeParams transcodeParams, ICloudBlob outputBlob, TraceWriter log)
+        public static async Task<string> TranscodeAndUpload(TranscodeParams transcodeParams, ICloudBlob outputBlob, ILogger log)
         {
             var outputFilePath = Path.Combine(GetTempTranscodeFolder(), $"{Guid.NewGuid()}{transcodeParams.OutputExtension}");
             try
@@ -62,7 +61,7 @@ namespace DurableFunctionVideoProcessor
             return GetReadSas(outputBlob, TimeSpan.FromHours(2));
         }
 
-        public static void TryDeleteFiles(TraceWriter log, params string[] files)
+        public static void TryDeleteFiles(ILogger log, params string[] files)
         {
             foreach (var file in files)
             {
@@ -75,7 +74,7 @@ namespace DurableFunctionVideoProcessor
                 }
                 catch (Exception e)
                 {
-                    log.Error($"Failed to clean up temporary file {file}", e);
+                    log.LogError($"Failed to clean up temporary file {file}", e);
                 }
             }
         }

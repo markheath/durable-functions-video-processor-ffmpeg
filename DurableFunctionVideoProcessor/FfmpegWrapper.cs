@@ -5,12 +5,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 
 namespace DurableFunctionVideoProcessor
 {
     static class FfmpegWrapper
     {
-        public static async Task Transcode(string inputPath, string ffmpegParams, string outputFile, TraceWriter log)
+        public static async Task Transcode(string inputPath, string ffmpegParams, string outputFile, ILogger log)
         {
             var prefix = ffmpegParams.Contains("-i ") ? "" : $"-i \"{inputPath}\" ";
             var arguments = $"{prefix}{ffmpegParams} \"{outputFile}\"";
@@ -35,7 +36,7 @@ namespace DurableFunctionVideoProcessor
             return Path.GetDirectoryName(path);
         }
 
-        private static async Task RunFfmpeg(string arguments, TraceWriter log)
+        private static async Task RunFfmpeg(string arguments, ILogger log)
         {
             var ffmpegPath = GetFfmpegPath();
             var processStartInfo = new ProcessStartInfo(ffmpegPath, arguments);
@@ -55,7 +56,7 @@ namespace DurableFunctionVideoProcessor
             await p.WaitForExitAsync();
             if (p.ExitCode != 0)
             {
-                log.Error(sb.ToString());
+                log.LogError(sb.ToString());
                 throw new InvalidOperationException($"Ffmpeg failed with exit code {p.ExitCode}");
             }
         }

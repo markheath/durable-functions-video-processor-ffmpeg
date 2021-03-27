@@ -4,7 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Extensions.Logging;
 
 namespace DurableFunctionVideoProcessor
 {
@@ -12,8 +13,8 @@ namespace DurableFunctionVideoProcessor
     {
         [FunctionName(OrchestratorNames.ProcessVideo)]
         public static async Task<object> ProcessVideo(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
+            [OrchestrationTrigger] IDurableOrchestrationContext ctx,
+            ILogger log)
         {
             var videoLocation = ctx.GetInput<string>();
             try
@@ -48,7 +49,7 @@ namespace DurableFunctionVideoProcessor
             catch (Exception e)
             {
                 if (!ctx.IsReplaying)
-                    log.Error("Failed to process video with error " + e.Message);
+                    log.LogError("Failed to process video with error " + e.Message);
                 await ctx.CallActivityAsync(ActivityNames.Cleanup, videoLocation);
                 return new {Error = "Failed to process video", e.Message};
             }
@@ -56,8 +57,8 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName(OrchestratorNames.Transcode)]
         public static async Task<string[]> Transcode(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
+            [OrchestrationTrigger] IDurableOrchestrationContext ctx,
+            ILogger log)
         {
             var videoLocation = ctx.GetInput<string>();
             var transcodeProfiles = await
@@ -76,8 +77,8 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName(OrchestratorNames.GetApprovalResult)]
         public static async Task<string> GetApprovalResult(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
+            [OrchestrationTrigger] IDurableOrchestrationContext ctx,
+            ILogger log)
         {
             var approvalInfo = ctx.GetInput<ApprovalInfo>();
             var emailTimeoutSeconds = await ctx.CallActivityAsync<int>(ActivityNames.SendApprovalRequestEmail, approvalInfo);
@@ -93,12 +94,12 @@ namespace DurableFunctionVideoProcessor
                 if (winner == approvalTask)
                 {
                     approvalResult = approvalTask.Result;
-                    if (!ctx.IsReplaying) log.Warning($"Received an approval result of {approvalResult}");
+                    if (!ctx.IsReplaying) log.LogWarning($"Received an approval result of {approvalResult}");
                     cts.Cancel(); // we should cancel the timeout task
                 }
                 else
                 {
-                    if (!ctx.IsReplaying) log.Warning($"Timed out waiting {emailTimeoutSeconds}s for an approval result");
+                    if (!ctx.IsReplaying) log.LogWarning($"Timed out waiting {emailTimeoutSeconds}s for an approval result");
                     approvalResult = "TimedOut";
                 }
             }
@@ -107,74 +108,18 @@ namespace DurableFunctionVideoProcessor
 
         [FunctionName(OrchestratorNames.PeriodicTask)]
         public static async Task<int> PeriodicTask(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
+            [OrchestrationTrigger] IDurableOrchestrationContext ctx,
+            ILogger log)
         {
             var timesRun = ctx.GetInput<int>();
             timesRun++;
             if (!ctx.IsReplaying)
-                log.Info($"Starting the PeriodicTask orchestrator {ctx.InstanceId}, {timesRun}");
+                log.LogInformation($"Starting the PeriodicTask orchestrator {ctx.InstanceId}, {timesRun}");
             await ctx.CallActivityAsync(ActivityNames.PeriodicActivity, timesRun);
             var nextRun = ctx.CurrentUtcDateTime.AddSeconds(30);
             await ctx.CreateTimer(nextRun, CancellationToken.None);
             ctx.ContinueAsNew(timesRun);
             return timesRun;
         }
-
-        /** EXAMPLES
-
-        /// <summary>
-        /// In this example we call an activity that triggers some external action. 
-        /// When that external action completes an event is raised which our orchestration is waiting for
-        /// Then we decide whether to continue or not
-        /// </summary>
-        [FunctionName("ContinueAsNewExample2")]
-        public static async Task<string> ContinueAsNewExample2(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
-        {
-            var lastRunResult = ctx.GetInput<string>();
-            if (!ctx.IsReplaying)
-                log.Info("Starting external action");
-            await ctx.CallActivityAsync("StartExternalAction", lastRunResult);
-            var externalActionResult = await ctx.WaitForExternalEvent<string>("ExternalActionCompleted");
-            if (externalActionResult != "end")
-                ctx.ContinueAsNew(externalActionResult);
-            return externalActionResult;
-        }
-
-        /// <summary>
-        /// This is the stateful singleton pattern that is currently NOT recoemmended
-        /// due to this race condition on GitHub which causes some events to get lost
-        /// https://github.com/Azure/azure-functions-durable-extension/issues/67
-        /// </summary>
-        [FunctionName("ContinueAsNewExample3")]
-        public static async Task<int> ContinueAsNewExample3(
-            [OrchestrationTrigger] DurableOrchestrationContext ctx,
-            TraceWriter log)
-        {
-            var counterState = ctx.GetInput<int>();
-            if (!ctx.IsReplaying)
-                log.Info($"Current counter state is {counterState}. Waiting for next operation.");
-            var operation = await ctx.WaitForExternalEvent<string>("operation");
-            if (!ctx.IsReplaying)
-                log.Info($"Received '{operation}' operation.");
-            operation = operation?.ToLowerInvariant();
-            if (operation == "incr")
-            {
-                counterState++;
-            }
-            else if (operation == "decr")
-            {
-                counterState--;
-            }
-            if (operation != "end")
-            {
-                ctx.ContinueAsNew(counterState);
-            }
-            return counterState;
-        }
-
-        **/
     }
 }
