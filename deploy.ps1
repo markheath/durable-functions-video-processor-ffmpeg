@@ -1,34 +1,52 @@
-# check we're logged in with the right account first!
-az account show --query name -o tsv
+# This script creates all the infrastrcutre using Azure CLI commands
+# Prerequisites:
+# - Azure CLI https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
+# - Azure Functions Core Tools https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local?tabs=windows%2Ccsharp%2Cbash#install-the-azure-functions-core-tools
+# More information https://markheath.net/post/deploying-azure-functions-with-azure-cli
 
-$resourceGroup = "dfvp-test2"
-$location = "westeurope"
-$appName = "dfvptest2"
+# step 1 - log in 
+az login
 
-# Create resource group
-az group create -n $resourceGroup -l $location
+# step 2 - ensure you are using the correct subscription
+az account set -s "MySubscription"
 
-# Deploy the template
-# creates: app service plan (consumption), function app, storage account, app insights
-az group deployment create -g $resourceGroup `
-        --template-file deploy.json `
-        --parameters "appName=$appName"
+# step 3 - pick unique names
+$RESOURCE_GROUP = "VideoProcessor789"
+$FUNCTION_APP_NAME = "videoprocessor789"
+$STORAGE_ACCOUNT_NAME = "videoprocessor789"
+$APP_INSIGHTS_NAME = "videoprocessor789"
+$LOCATION = "westeurope"
 
-# --parameters @MySite.parameters.json \
+# step 4 - create the resource group
+az group create -n $RESOURCE_GROUP -l $LOCATION
+
+# step 5 - create the storage account
+az storage account create -n $STORAGE_ACCOUNT_NAME -l $LOCATION -g $RESOURCE_GROUP --sku Standard_LRS
+
+# step 6 - create an Application Insights Instance
+az resource create `
+  -g $RESOURCE_GROUP -n $APP_INSIGHTS_NAME `
+  --resource-type "Microsoft.Insights/components" `
+  --properties '{\"Application_Type\":\"web\"}'
 
 
-#az functionapp config appsettings set IntroLocation=$introLocation
+# step 7 - create the function app, connected to the storage account and app insights
+az functionapp create `
+  -n $FUNCTION_APP_NAME `
+  --storage-account $STORAGE_ACCOUNT_NAME `
+  --consumption-plan-location $LOCATION `
+  --app-insights $APP_INSIGHTS_NAME `
+  --runtime dotnet `
+  --functions-version 3 `
+  --os-type Windows `
+  -g $RESOURCE_GROUP
 
+# step 8 - (optional - publish any settings)
+az functionapp config appsettings set -n $FUNCTION_APP_NAME -g $RESOURCE_GROUP `
+    --settings "MySetting1=Hello" "MySetting2=World"
 
-# to build (n.b. don't know why RunCodeAnalysis has got turned on - can't work out how to disable)
-. "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe" /p:Configuration=Release /p:RunCodeAnalysis=False
+# step 9 - publish the applciation code
+func azure functionapp publish $FUNCTION_APP_NAME
 
-# create a zip
-$publishFolder = "$(pwd)\DurableFunctionVideoProcessor\bin\Release\net461"
-$destination = "$(pwd)\publish.zip"
-If (Test-Path $destination){ Remove-Item $destination }
-Add-Type -assembly "system.io.compression.filesystem"
-[io.compression.zipfile]::CreateFromDirectory($publishFolder, $destination)
-
-az functionapp deployment source config-zip `
-    -n $appName -g $resourceGroup --src $destination
+# CLEANUP
+az group delete -n $RESOURCE_GROUP 
