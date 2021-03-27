@@ -13,5 +13,8 @@ az deployment group create `
   --template-file $BICEP_FILE `
   --parameters "appName=$APP_NAME"
 
+# to publish code (run from the folder containing the csproj)
+func azure functionapp publish $APP_NAME
+
 # to clean up
 az group delete -n $RESOURCE_GROUP

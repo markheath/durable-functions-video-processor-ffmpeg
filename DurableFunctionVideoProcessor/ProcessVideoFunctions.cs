@@ -68,11 +68,11 @@ namespace DurableFunctionVideoProcessor
         }
 
         [FunctionName("AutoProcessUploadedVideos")]
-        public static async Task AutoProcessUploadedVideos([BlobTrigger("uploads/{name}")] ICloudBlob blob, string name,
+        public static async Task AutoProcessUploadedVideos(
+            [BlobTrigger("uploads/{name}")] ICloudBlob blob, string name,
             [DurableClient] IDurableOrchestrationClient starter,
             ILogger log)
         {
-
             var orchestrationId = await starter.StartNewAsync(OrchestratorNames.ProcessVideo, 
                 blob.GetReadSas(TimeSpan.FromHours(2)));
             log.LogInformation($"Started an orchestration {orchestrationId} for uploaded video {name}");
