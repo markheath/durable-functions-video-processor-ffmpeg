@@ -1,7 +1,6 @@
-﻿namespace DurableFunctionVideoProcessor
+﻿namespace DurableFunctionVideoProcessor;
+
+public static class EventNames
 {
-    public static class EventNames
-    {
-        public const string ApprovalResult = "ApprovalResult";
-    }
+    public const string ApprovalResult = "ApprovalResult";
 }
